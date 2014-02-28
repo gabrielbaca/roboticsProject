@@ -181,8 +181,8 @@ Point findFlame(const Mat &sourceImage)
 	{
 		for (int x = 0; x < sourceImage.cols; ++x)
 		{
-			//if(hsvImage.at<Vec3b>(y, x)[0 == 0 &&
-			//	hsvImage.at<Vec3b>(y,x)
+			if(hsvImage.at<Vec3b>(y, x)[0] == 0 &&
+				hsvImage.at<Vec3b>(y,x)
 		}
 	}
 	return Point();

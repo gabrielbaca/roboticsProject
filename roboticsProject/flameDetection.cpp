@@ -1,9 +1,8 @@
-#include <opencv2\core\core.hpp>
-#include <opencv2\highgui\highgui.hpp>
-#include <opencv2\imgproc\imgproc.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 #include <fstream>
 #include <iostream>
-#include <Windows.h>
 #include <queue>
 #define imageHeight 480
 #define imageWidth 640
@@ -40,7 +39,7 @@ void print();
 int main()
 {
 	VideoCapture cameraFeed;
-	vector<vector<Point>> contours;
+	vector<vector<Point> > contours;
 	vector<Vec4i> hierarchy;
 	Mat element = getStructuringElement(MORPH_RECT, Size(11, 23), Point(-1,-1));
 	Mat cannyOutput;
@@ -166,145 +165,24 @@ void complementImage(const Mat &sourceImage, Mat &destinationImage)
 	if (destinationImage.empty())
 		destinationImage = Mat(sourceImage.rows, sourceImage.cols, sourceImage.type());
 
-	for (int y = 0; y < sourceImage.rows; ++y)
-		for (int x = 0; x < sourceImage.cols; ++x)
-			for (int i = 0; i < sourceImage.channels(); ++i)
-			{
-				destinationImage.at<Vec3b>(y, x)[i] = 255 - sourceImage.at<Vec3b>(y, x)[i];
-				//destinationImage.at<Vec3b>(y, sourceImage.cols - 1 - x)[i] = sourceImage.at<Vec3b>(y, x)[i];
-			}
-}
-Point findFlame(const Mat &sourceImage)
-{
-	Point flameSeed = Point();
+	int channels = destinationImage.channels();
+
 	for (int y = 0; y < sourceImage.rows; ++y)
 	{
+		uchar* sourceImagePointer = (uchar*)sourceImage.ptr<uchar>(y);
+		uchar* destinationImagePointer = (uchar*)destinationImage.ptr<uchar>(y);
 		for (int x = 0; x < sourceImage.cols; ++x)
 		{
-			if(hsvImage.at<Vec3b>(y, x)[0] == 0 &&
-				hsvImage.at<Vec3b>(y,x)
+			for (int i = 0; i < channels; ++i)
+			{
+				destinationImagePointer[x*channels+i] = 255 - sourceImagePointer[x*channels+i];
+				//destinationImage.at<Vec3b>(y, x)[i] = 255 - sourceImage.at<Vec3b>(y, x)[i];
+				
+			}
+
 		}
+			
 	}
-	return Point();
+		
 }
-//
-//void thresholdImage(const Mat &sourceImage, Mat &destinationImage)
-//{
-//	if (destinationImage.empty())
-//		destinationImage = Mat(sourceImage.rows, sourceImage.cols, sourceImage.type());
-//
-//	for (int y = 0; y < sourceImage.rows; ++y)
-//		for (int x = 0; x < sourceImage.cols; ++x)
-//		{
-//			//if(sourceImage.at<Vec3b>(y, x)[2] >  194 && sourceImage.at<Vec3b>(y, x)[2] < 255) //Red, V
-//			//{
-//			//	if(sourceImage.at<Vec3b>(y, x)[1] > 229 && sourceImage.at<Vec3b>(y, x)[1] < 255) //Green, S
-//			//	{
-//			//		if(sourceImage.at<Vec3b>(y, x)[0] > 95 && sourceImage.at<Vec3b>(y, x)[0] < 106) //Blue, H
-//			//		{
-//			//			destinationImage.at<uchar>(y, x) = 255;
-//			//		}
-//			//	}
-//			//}
-//			if(sourceImage.at<Vec3b>(y, x)[0] > 95 && sourceImage.at<Vec3b>(y, x)[0] < 106)
-//			{
-//				if(sourceImage.at<Vec3b>(y, x)[1] > 229)
-//				{
-//					if(sourceImage.at<Vec3b>(y, x)[0] > 194)
-//					{
-//						destinationImage.at<uchar>(y, x) = 255;
-//					}
-//				}
-//			}
-//			else
-//			{
-//				destinationImage.at<uchar>(y, x) = 0;
-//			}
-//		}
-//}
-//
-//void deteccion_fuego(Mat frame){
-//	int dilation_size = 0;
-//	vector<vector<Point> > contours;
-//	Mat canny_output;
-//	Mat thr1(frame.rows, frame.cols, CV_8UC1);
-//	Mat src_gray; 
-//	vector<Vec4i> hierarchy;
-//	Rect aux;
-//	cvtColor(frame, src_gray, CV_RGB2GRAY);
-//	adaptiveThreshold(src_gray, thr1, 255, ADAPTIVE_THRESH_MEAN_C, THRESH_BINARY , 3, 1);
-//	threshold( src_gray, thr1, 250, 255,THRESH_BINARY );
-//	//Canny( thr1, canny_output, 255, 255, 3);
-//	Mat element = getStructuringElement(MORPH_RECT, Size(2 * dilation_size + 1, 2 * dilation_size + 1), Point(dilation_size, dilation_size));
-//	 morphologyEx( thr1, thr1, MORPH_CLOSE , element );
-//
-//	imshow("Camara...",frame);	
-//	imshow("Threshold", thr1);
-//	waitKey(30);
-//	
-// 
-//  /// Find contours
-//  findContours(thr1, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
-// 
-//  //cout<<" "<<endl;
-//   vector<Rect> boundRect(contours.size());
-//   vector<vector<Point>> contours_poly(contours.size());
-//
-//  /// Draw contours
-//  Mat drawing = Mat::zeros(thr1.size(), CV_8UC3);
-//  	if (contours.size()>0)
-//  //for( int i = 0; i< contours.size()-contours.size()/2; i++ )
-//     {
-//		double a = contourArea(contours[0],false);  //  Find the area of contour
-//		if(a>5){					  //25
-//		system("cls");
-//		 cout<<"Deteciion de fuego..."<<endl;
-//		 //waitKey(150);
-//		 //fire(Pic18);
-//       drawContours( thr1, contours, 0,  Scalar( 255, 255, 255), 2, 8, hierarchy, 0, Point() );
-//	   //cout<<"p1"<<endl;
-//	   approxPolyDP( Mat(contours[0]), contours_poly[0], 3, true );
-//	   //cout<<"p2"<<endl;
-//       boundRect[0] = boundingRect(Mat(contours_poly[0]));
-//	   //cout<<"p3"<<endl;
-//	   //waitKey();
-//	   aux = boundRect[0];
-//	   if (boundRect[0].width / boundRect[0].height <= 1){
-//		  // cout<<"p4"<<endl;
-//		rectangle( drawing, boundRect[0].tl(), boundRect[0].br(), Scalar( 255, 255, 255), 2, 8, 0 );
-//		//cout<<"p5"<<endl;
-//		rectangle( frame, boundRect[0].tl(), boundRect[0].br(), Scalar( 0, 0, 255), 2, 8, 0 );
-//		
-//		//cout<<"boundRect[0].x"<<boundRect[0].x<<endl;
-//		//cout<<"boundRect[0].y"<<boundRect[0].y<<endl;
-//		//waitKey();
-//		
-//		if(boundRect[0].x> frame.cols/2) 
-//		{
-//			putText(frame, "Right", Point(5, 440),  FONT_HERSHEY_SIMPLEX, 2, Scalar(255, 255, 255), 1, 8, false);
-//		}
-//		else if (boundRect[0].x> frame.cols/2-5 && boundRect[0].x< frame.cols/2+5) 
-//		{
-//			putText(frame, "Center", Point(5, 440),  FONT_HERSHEY_SIMPLEX, 2, Scalar(255, 255, 255), 1, 8, false);
-//		}
-//		else 
-//		{
-//			putText(frame, "Left", Point(5, 440),  FONT_HERSHEY_SIMPLEX, 2, Scalar(255, 255, 255), 1, 8, false);
-//		}
-//
-//		imshow("Flama detectada", frame);
-//	   	   waitKey(50);
-//	   }
-//	    }else{
-//			//cout<<"p4"<<endl;
-//			system("cls");
-//			rectangle( frame, aux.tl(), aux.br(), Scalar( 0, 0, 255), 2, 8, 0 );
-//		
-//			rectangle( drawing, boundRect[0].tl(), boundRect[0].br(), Scalar( 0, 0, 0), 2, 8, 0 );
-//			imshow("Se ha detectado la flama", frame);
-//	   }
-//	   //system("cls");
-//	   imshow("Flama detectada", frame);
-//	   imshow( "Contours", drawing );
-//}
-//}
+

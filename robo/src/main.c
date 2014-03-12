@@ -139,9 +139,9 @@ int main(void)
 	mPORTDSetPinsDigitalOut(BIT_4 | BIT_5 | BIT_6 | BIT_7 |
 					BIT_8 | BIT_9 | BIT_10 | BIT_11);	// Make PORTD output.
 /* PORTD for LEDs - DEBUGGING */
-/*	mPORTDClearBits(BIT_0 | BIT_1 | BIT_2);
+	mPORTDClearBits(BIT_0 | BIT_1 | BIT_2);
 	mPORTDSetPinsDigitalOut(BIT_0 | BIT_1 | BIT_2);
-*/
+
 
 // Explorer-16 uses UART2 to connect to the PC.
 	// This initialization assumes 36MHz Fpb clock. If it changes,
@@ -178,7 +178,7 @@ int main(void)
 			delayLeft=0;
 			delayRight=0;
 			mPORTBSetBits(BIT_8 | BIT_9| BIT_10 | BIT_11);	//Sends trigger signal to the four sensors
-//		mPORTDSetBits(BIT_0); 	//DEBUGGING
+			mPORTDSetBits(BIT_0); 	//DEBUGGING
 //		mPORTDClearBits(BIT_1);
 			ConfigIntTimer2(T2_INT_ON); //Starts timer2
 			/*Enable interrupts for echo signals*/
@@ -362,6 +362,9 @@ void __ISR(_TIMER_1_VECTOR, ipl2) Timer1Handler(void)
 
 	if (auxcounter != 0)
 		auxcounter--;
+
+	if(counterDistanceMeasure !=0)
+		counterDistanceMeasure--;
 }
 
 /* TIMER 2 Interrupt Handler - configured to 50us periods */
@@ -369,7 +372,7 @@ void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
 {
     // clear the interrupt flag
     mT2ClearIntFlag();
-//						mPORTDSetBits(BIT_2); 	//DEBUGGING
+	mPORTDSetBits(BIT_2); 	//DEBUGGING
 	counterTrigger--;
 	if(counterTrigger == 0){
 		mPORTBClearBits(BIT_8 | BIT_9| BIT_10 | BIT_11);	//Shut down trigger signal
@@ -389,7 +392,6 @@ void __ISR(_EXTERNAL_1_VECTOR, ipl7) INT1Interrupt() //Front sensor
    mINT1ClearIntFlag();
    frontDistance= delayFront*50/58; //us/58=cm
 mPORTDSetBits(BIT_1); 	//DEBUGGING
-mPORTDClearBits(BIT_0);
 }
 void __ISR(_EXTERNAL_2_VECTOR, ipl7) INT2Interrupt() 
 { 

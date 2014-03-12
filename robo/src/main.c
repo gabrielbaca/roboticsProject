@@ -98,7 +98,7 @@ int main(void)
 	ConfigIntTimer1(T1_INT_ON | T1_INT_PRIOR_2);
 /* TIMER2 - 20 khz interrupt for distance measure*/
 	OpenTimer2(T2_ON | T2_SOURCE_INT | T2_PS_1_1, T2_TICK);
-	ConfigIntTimer2(T2_INT_OFF | T2_INT_PRIOR_2); //It is off until trigger
+	ConfigIntTimer2(T2_INT_ON | T2_INT_PRIOR_3); 
 
 /* PORTA.0 for servo-PWM */
 	mPORTAClearBits(BIT_2);
@@ -110,10 +110,10 @@ int main(void)
 	//PORTSetPinsDigitalIn(IOPORT_B, BIT_12 | BIT_13| BIT_14 | BIT_15); //echo
 
 /* external interrupts for echo signals */
-	ConfigINT1(EXT_INT_PRI_1 | RISING_EDGE_INT | EXT_INT_DISABLE); //RE8, highest priority
-	ConfigINT2(EXT_INT_PRI_2 | RISING_EDGE_INT | EXT_INT_DISABLE); //RE9
-	ConfigINT3(EXT_INT_PRI_3 | RISING_EDGE_INT | EXT_INT_DISABLE); //RA14
-	ConfigINT4(EXT_INT_PRI_4 | RISING_EDGE_INT | EXT_INT_DISABLE); //RA15
+	ConfigINT1(EXT_INT_PRI_1 | RISING_EDGE_INT | EXT_INT_ENABLE); //RE8, highest priority
+	ConfigINT2(EXT_INT_PRI_2 | RISING_EDGE_INT | EXT_INT_ENABLE); //RE9
+	ConfigINT3(EXT_INT_PRI_3 | RISING_EDGE_INT | EXT_INT_ENABLE); //RA14
+	ConfigINT4(EXT_INT_PRI_4 | RISING_EDGE_INT | EXT_INT_ENABLE); //RA15
 
 /* PINS used for the buttons */
     PORTSetPinsDigitalIn(IOPORT_D, BIT_13);
@@ -139,9 +139,9 @@ int main(void)
 	mPORTDSetPinsDigitalOut(BIT_4 | BIT_5 | BIT_6 | BIT_7 |
 					BIT_8 | BIT_9 | BIT_10 | BIT_11);	// Make PORTD output.
 /* PORTD for LEDs - DEBUGGING */
-/*	mPORTDClearBits(BIT_0 | BIT_1 | BIT_2);
+	mPORTDClearBits(BIT_0 | BIT_1 | BIT_2);
 	mPORTDSetPinsDigitalOut(BIT_0 | BIT_1 | BIT_2);
-*/
+
 
 // Explorer-16 uses UART2 to connect to the PC.
 	// This initialization assumes 36MHz Fpb clock. If it changes,
@@ -178,14 +178,9 @@ int main(void)
 			delayLeft=0;
 			delayRight=0;
 			mPORTBSetBits(BIT_8 | BIT_9| BIT_10 | BIT_11);	//Sends trigger signal to the four sensors
-//		mPORTDSetBits(BIT_0); 	//DEBUGGING
+			mPORTDSetBits(BIT_0); 	//DEBUGGING
 //		mPORTDClearBits(BIT_1);
-			ConfigIntTimer2(T2_INT_ON); //Starts timer2
-			/*Enable interrupts for echo signals*/
-			ConfigINT1(EXT_INT_ENABLE); //RE8, biggest priority
-			ConfigINT2(EXT_INT_ENABLE); //RE9
-			ConfigINT3(EXT_INT_ENABLE); //RA14
-			ConfigINT4(EXT_INT_ENABLE); //RA15
+			
 			counterDistanceMeasure=600; //measure distance again
 		}
 
@@ -362,14 +357,17 @@ void __ISR(_TIMER_1_VECTOR, ipl2) Timer1Handler(void)
 
 	if (auxcounter != 0)
 		auxcounter--;
+
+	if(counterDistanceMeasure !=0)
+		counterDistanceMeasure--;
 }
 
 /* TIMER 2 Interrupt Handler - configured to 50us periods */
-void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
+void __ISR(_TIMER_2_VECTOR, ipl3) Timer2Handler(void)
 {
     // clear the interrupt flag
     mT2ClearIntFlag();
-//						mPORTDSetBits(BIT_2); 	//DEBUGGING
+	mPORTDSetBits(BIT_2); 	//DEBUGGING
 	counterTrigger--;
 	if(counterTrigger == 0){
 		mPORTBClearBits(BIT_8 | BIT_9| BIT_10 | BIT_11);	//Shut down trigger signal
@@ -389,7 +387,6 @@ void __ISR(_EXTERNAL_1_VECTOR, ipl7) INT1Interrupt() //Front sensor
    mINT1ClearIntFlag();
    frontDistance= delayFront*50/58; //us/58=cm
 mPORTDSetBits(BIT_1); 	//DEBUGGING
-mPORTDClearBits(BIT_0);
 }
 void __ISR(_EXTERNAL_2_VECTOR, ipl7) INT2Interrupt() 
 { 

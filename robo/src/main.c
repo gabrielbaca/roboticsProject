@@ -2,7 +2,7 @@
  *
  *                  
  *
- *********************************************************************
+ **********************************************************************
  * FileName:        main.c
  * Dependencies:
  * Processor:       PIC32
@@ -67,7 +67,8 @@ void step (unsigned char data, unsigned char motorNumber);
 
 /*************GLOBALS**********************/
 unsigned char COMMAND;
-unsigned char MotorsON = 1;
+unsigned char Path_Start = 0;
+unsigned char MotorsON = 0;
 unsigned char M1forward = 1, M2forward = 1;
 unsigned int M1_counter = 0, M2_counter = 0;
 unsigned int counterDistanceMeasure = 0, counterTrigger=0, counterEcho=0;
@@ -89,7 +90,7 @@ int main(void)
 	unsigned int M1_stepPeriod, M2_stepPeriod;
 	M1_stepPeriod = M2_stepPeriod = 1000; // in tens of u-seconds
 	unsigned char M1_state = 0, M2_state = 0;
-	
+	unsigned int step_counter;
 
 	SYSTEMConfig(GetSystemClock(), SYS_CFG_WAIT_STATES | SYS_CFG_PCACHE);
 
@@ -188,7 +189,7 @@ int main(void)
 			ConfigINT4(EXT_INT_ENABLE); //RA15
 			counterDistanceMeasure=600; //measure distance again
 		}
-
+/*
 		//Process UART command
 		switch (COMMAND) {
 			case 'q':
@@ -223,7 +224,54 @@ int main(void)
 				break;
 		}
 		COMMAND = 0;
-		
+*/		
+		/****** Robot path state machine **********/
+		static int path_state = 0;
+		if (Path_Start) {
+			switch (path_state) {
+				case 0:
+					step_counter = 10000;		//50 giros de 200 pasos = 10000
+					MotorsON = 1;
+					M1forward = M2forward = 1;
+					path_state = 1;
+					break;
+				case 1:
+					if (step_counter == 0) {
+						step_counter = 10000;
+						MotorsON = 1;
+						M1forward = M2forward = 0;
+						path_state = 2;
+					}
+					break;
+				case 2:
+					if (step_counter == 0) {
+						step_counter = 10000;
+						MotorsON = 1;
+						M1forward = 1;
+						M2forward = 0;
+						path_state = 3;
+					}
+					break;
+				case 3:
+					if (step_counter == 0) {
+						step_counter = 10000;
+						MotorsON = 1;
+						M1forward = 0;
+						M2forward = 1;
+						path_state = 4;
+					}
+					break;
+				case 4:
+					MotorsON = 0;
+					path_state = 0;
+					Path_Start = 0;
+					break;
+			}
+		} else {
+			path_state = 0;
+		}
+		/******************************************/
+
 		if ( slow ) {
 			M1_stepPeriod = 50; // value between 20 and 100 in tens of u-seconds (step period)
 			M2_stepPeriod = 50;
@@ -277,6 +325,7 @@ int main(void)
 						break;	
 				}
 				M1_counter = M1_stepPeriod;
+				step_counter--;
 			}
 			
 			if (M2_counter == 0) {
@@ -313,7 +362,8 @@ int main(void)
 				}
 				M2_counter = M2_stepPeriod;
 			}
-
+			if (step_counter == 0)
+				MotorsON = 0;
 		} else {
 			mPORTDSetBits(BIT_4 | BIT_5 | BIT_6 | BIT_7 |
 					BIT_8 | BIT_9 | BIT_10 | BIT_11);
@@ -456,10 +506,12 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl2) ChangeNotice_Handler(void)
 
     // .. things to do .. 
     if ( !(temp & (1<<13)) ) { //button on RD13 is pressed
-		if (MotorsON == 0)
-			MotorsON = 1;
-		else
+		if (Path_Start == 0)
+			Path_Start = 1;
+		else {
+			Path_Start = 0;
 			MotorsON = 0;
+		}
 	}
 	
 }

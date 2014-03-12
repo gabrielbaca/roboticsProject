@@ -42,7 +42,7 @@ int main()
 	VideoCapture cameraFeed;
 	vector<vector<Point>> contours;
 	vector<Vec4i> hierarchy;
-	Mat element = getStructuringElement(MORPH_RECT, Size(11, 23), Point(-1,-1));
+	Mat element = getStructuringElement(MORPH_RECT, Size(3, 3), Point(-1,-1));
 	Mat cannyOutput;
 	//Mat kernel = Mat::ones(Size(5, 5), CV_8UC1);
 	char key = ' ';
@@ -71,14 +71,16 @@ int main()
 		{
 			cameraFeed >> currentImage;
 			gammaImage = correctGamma(currentImage, 0.2);
-			complementImage(gammaImage, complementedImage);
+			//complementImage(gammaImage, complementedImage);
+			bitwise_not(gammaImage, complementedImage);
 			cvtColor(complementedImage, hsvImage, CV_BGR2HSV);
 			imshow("HSV", hsvImage);
 			//split(hsvImage, hsv_planes);
 			inRange(hsvImage, Scalar(85, 230, 185), Scalar(106, 255, 225), binImageYellow);
 			inRange(hsvImage, Scalar(90, 250, 5), Scalar(120, 255, 144), binImageGreen);
 			bitwise_or(binImageYellow, binImageGreen, binImage);
-			dilate(binImage, filledImage, element);
+			//erode(binImage, filledImage, element);
+			morphologyEx(binImage, filledImage, MORPH_OPEN, element);
 			Canny(filledImage, cannyOutput, thresh, thresh *2, 3);
 			findContours(cannyOutput, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0,0));
 
@@ -88,18 +90,7 @@ int main()
 			  Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255));
 			  drawContours(drawing, contours, i, color, 2, 8, hierarchy, 0, Point());
 			}
-			//Rect rect = boundingRect(filledImage);
-			//rectangle(filledImage, Point(rect.x, rect.y),Point(rect.x + rect.width, rect.y + rect.height), Scalar(255), 1, 4);
-			//morphologyEx(binImage, filledImage, MORPH_CLOSE, element);
-			//thresholdImage(hsvImage, binImage);
-			//thresholdImage(complementedImage, binImage);
-			//deteccion_fuego(currentImage);
-			//imshow("Camera Feed", currentImage);
-			//imshow("Gamma corrected", gammaImage);
-			//imshow("Complemented image", complementedImage);
-			//morphologyEx(binImage, binImage, MORPH_OPEN, element);
-			//imshow("Yellow", binImageYellow);
-			//imshow("Green", binImageGreen);
+
 			imshow("Binary", filledImage);
 			imshow("Contours", drawing);
 		}
@@ -174,137 +165,3 @@ void complementImage(const Mat &sourceImage, Mat &destinationImage)
 				//destinationImage.at<Vec3b>(y, sourceImage.cols - 1 - x)[i] = sourceImage.at<Vec3b>(y, x)[i];
 			}
 }
-Point findFlame(const Mat &sourceImage)
-{
-	Point flameSeed = Point();
-	for (int y = 0; y < sourceImage.rows; ++y)
-	{
-		for (int x = 0; x < sourceImage.cols; ++x)
-		{
-			if(hsvImage.at<Vec3b>(y, x)[0] == 0 &&
-				hsvImage.at<Vec3b>(y,x)
-		}
-	}
-	return Point();
-}
-//
-//void thresholdImage(const Mat &sourceImage, Mat &destinationImage)
-//{
-//	if (destinationImage.empty())
-//		destinationImage = Mat(sourceImage.rows, sourceImage.cols, sourceImage.type());
-//
-//	for (int y = 0; y < sourceImage.rows; ++y)
-//		for (int x = 0; x < sourceImage.cols; ++x)
-//		{
-//			//if(sourceImage.at<Vec3b>(y, x)[2] >  194 && sourceImage.at<Vec3b>(y, x)[2] < 255) //Red, V
-//			//{
-//			//	if(sourceImage.at<Vec3b>(y, x)[1] > 229 && sourceImage.at<Vec3b>(y, x)[1] < 255) //Green, S
-//			//	{
-//			//		if(sourceImage.at<Vec3b>(y, x)[0] > 95 && sourceImage.at<Vec3b>(y, x)[0] < 106) //Blue, H
-//			//		{
-//			//			destinationImage.at<uchar>(y, x) = 255;
-//			//		}
-//			//	}
-//			//}
-//			if(sourceImage.at<Vec3b>(y, x)[0] > 95 && sourceImage.at<Vec3b>(y, x)[0] < 106)
-//			{
-//				if(sourceImage.at<Vec3b>(y, x)[1] > 229)
-//				{
-//					if(sourceImage.at<Vec3b>(y, x)[0] > 194)
-//					{
-//						destinationImage.at<uchar>(y, x) = 255;
-//					}
-//				}
-//			}
-//			else
-//			{
-//				destinationImage.at<uchar>(y, x) = 0;
-//			}
-//		}
-//}
-//
-//void deteccion_fuego(Mat frame){
-//	int dilation_size = 0;
-//	vector<vector<Point> > contours;
-//	Mat canny_output;
-//	Mat thr1(frame.rows, frame.cols, CV_8UC1);
-//	Mat src_gray; 
-//	vector<Vec4i> hierarchy;
-//	Rect aux;
-//	cvtColor(frame, src_gray, CV_RGB2GRAY);
-//	adaptiveThreshold(src_gray, thr1, 255, ADAPTIVE_THRESH_MEAN_C, THRESH_BINARY , 3, 1);
-//	threshold( src_gray, thr1, 250, 255,THRESH_BINARY );
-//	//Canny( thr1, canny_output, 255, 255, 3);
-//	Mat element = getStructuringElement(MORPH_RECT, Size(2 * dilation_size + 1, 2 * dilation_size + 1), Point(dilation_size, dilation_size));
-//	 morphologyEx( thr1, thr1, MORPH_CLOSE , element );
-//
-//	imshow("Camara...",frame);	
-//	imshow("Threshold", thr1);
-//	waitKey(30);
-//	
-// 
-//  /// Find contours
-//  findContours(thr1, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
-// 
-//  //cout<<" "<<endl;
-//   vector<Rect> boundRect(contours.size());
-//   vector<vector<Point>> contours_poly(contours.size());
-//
-//  /// Draw contours
-//  Mat drawing = Mat::zeros(thr1.size(), CV_8UC3);
-//  	if (contours.size()>0)
-//  //for( int i = 0; i< contours.size()-contours.size()/2; i++ )
-//     {
-//		double a = contourArea(contours[0],false);  //  Find the area of contour
-//		if(a>5){					  //25
-//		system("cls");
-//		 cout<<"Deteciion de fuego..."<<endl;
-//		 //waitKey(150);
-//		 //fire(Pic18);
-//       drawContours( thr1, contours, 0,  Scalar( 255, 255, 255), 2, 8, hierarchy, 0, Point() );
-//	   //cout<<"p1"<<endl;
-//	   approxPolyDP( Mat(contours[0]), contours_poly[0], 3, true );
-//	   //cout<<"p2"<<endl;
-//       boundRect[0] = boundingRect(Mat(contours_poly[0]));
-//	   //cout<<"p3"<<endl;
-//	   //waitKey();
-//	   aux = boundRect[0];
-//	   if (boundRect[0].width / boundRect[0].height <= 1){
-//		  // cout<<"p4"<<endl;
-//		rectangle( drawing, boundRect[0].tl(), boundRect[0].br(), Scalar( 255, 255, 255), 2, 8, 0 );
-//		//cout<<"p5"<<endl;
-//		rectangle( frame, boundRect[0].tl(), boundRect[0].br(), Scalar( 0, 0, 255), 2, 8, 0 );
-//		
-//		//cout<<"boundRect[0].x"<<boundRect[0].x<<endl;
-//		//cout<<"boundRect[0].y"<<boundRect[0].y<<endl;
-//		//waitKey();
-//		
-//		if(boundRect[0].x> frame.cols/2) 
-//		{
-//			putText(frame, "Right", Point(5, 440),  FONT_HERSHEY_SIMPLEX, 2, Scalar(255, 255, 255), 1, 8, false);
-//		}
-//		else if (boundRect[0].x> frame.cols/2-5 && boundRect[0].x< frame.cols/2+5) 
-//		{
-//			putText(frame, "Center", Point(5, 440),  FONT_HERSHEY_SIMPLEX, 2, Scalar(255, 255, 255), 1, 8, false);
-//		}
-//		else 
-//		{
-//			putText(frame, "Left", Point(5, 440),  FONT_HERSHEY_SIMPLEX, 2, Scalar(255, 255, 255), 1, 8, false);
-//		}
-//
-//		imshow("Flama detectada", frame);
-//	   	   waitKey(50);
-//	   }
-//	    }else{
-//			//cout<<"p4"<<endl;
-//			system("cls");
-//			rectangle( frame, aux.tl(), aux.br(), Scalar( 0, 0, 255), 2, 8, 0 );
-//		
-//			rectangle( drawing, boundRect[0].tl(), boundRect[0].br(), Scalar( 0, 0, 0), 2, 8, 0 );
-//			imshow("Se ha detectado la flama", frame);
-//	   }
-//	   //system("cls");
-//	   imshow("Flama detectada", frame);
-//	   imshow( "Contours", drawing );
-//}
-//}

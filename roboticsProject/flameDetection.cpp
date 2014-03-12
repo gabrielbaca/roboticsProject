@@ -1,8 +1,9 @@
-#include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2\core\core.hpp>
+#include <opencv2\highgui\highgui.hpp>
+#include <opencv2\imgproc\imgproc.hpp>
 #include <fstream>
 #include <iostream>
+#include <Windows.h>
 #include <queue>
 #define imageHeight 480
 #define imageWidth 640
@@ -39,7 +40,7 @@ void print();
 int main()
 {
 	VideoCapture cameraFeed;
-	vector<vector<Point> > contours;
+	vector<vector<Point>> contours;
 	vector<Vec4i> hierarchy;
 	Mat element = getStructuringElement(MORPH_RECT, Size(3, 3), Point(-1,-1));
 	Mat cannyOutput;
@@ -128,11 +129,10 @@ void mouseCoordinates(int event, int x, int y, int flags, void* param)
 			hueClick = hsvImage.at<Vec3b>(y, x)[0];
 	        saturationClick = hsvImage.at<Vec3b>(y, x)[1];
 	        valueClick = hsvImage.at<Vec3b>(y, x)[2];
-
-			/*  Draw a point */
-            //points.push_back(Point(x, y));
+			print();
             break;
         case CV_EVENT_RBUTTONDOWN:
+			system("cls");
             break;
     }
 }
@@ -150,41 +150,3 @@ Mat correctGamma(Mat &img, double gamma) {
  
 	return result;
 }
-
-void complementImage(const Mat &sourceImage, Mat &destinationImage)
-{
-	if (destinationImage.empty())
-		destinationImage = Mat(sourceImage.rows, sourceImage.cols, sourceImage.type());
-
-<<<<<<< HEAD
-	for (int y = 0; y < sourceImage.rows; ++y)
-		for (int x = 0; x < sourceImage.cols; ++x)
-			for (int i = 0; i < sourceImage.channels(); ++i)
-			{
-				destinationImage.at<Vec3b>(y, x)[i] = 255 - sourceImage.at<Vec3b>(y, x)[i];
-				//destinationImage.at<Vec3b>(y, sourceImage.cols - 1 - x)[i] = sourceImage.at<Vec3b>(y, x)[i];
-			}
-}
-=======
-	int channels = destinationImage.channels();
-
-	for (int y = 0; y < sourceImage.rows; ++y)
-	{
-		uchar* sourceImagePointer = (uchar*)sourceImage.ptr<uchar>(y);
-		uchar* destinationImagePointer = (uchar*)destinationImage.ptr<uchar>(y);
-		for (int x = 0; x < sourceImage.cols; ++x)
-		{
-			for (int i = 0; i < channels; ++i)
-			{
-				destinationImagePointer[x*channels+i] = 255 - sourceImagePointer[x*channels+i];
-				//destinationImage.at<Vec3b>(y, x)[i] = 255 - sourceImage.at<Vec3b>(y, x)[i];
-				
-			}
-
-		}
-			
-	}
-		
-}
-
->>>>>>> a367a1ce28456e7cedef95bf5567d1a48754e020

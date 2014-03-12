@@ -46,9 +46,11 @@
 #define	GetSystemClock() 	(80000000ul)
 #define SYS_FREQ 			(80000000L)
 #define PB_DIV         		8
+#define PB2_DIV				4
 #define PRESCALE       		1
 #define TOGGLES_PER_SEC		10000
 #define T1_TICK       		(SYS_FREQ/PB_DIV/PRESCALE/TOGGLES_PER_SEC)
+#define T2_TICK				(SYS_FREQ/PB2_DIV/PRESCALE/TOGGLES_PER_SEC)
 #define	GetPeripheralClock()		(GetSystemClock()/(1 << OSCCONbits.PBDIV))
 #define	GetInstructionClock()		(GetSystemClock())
 #define DESIRED_BAUDRATE    	(9600)      //The desired UART BaudRate
@@ -68,6 +70,9 @@ unsigned char COMMAND;
 unsigned char MotorsON = 1;
 unsigned char M1forward = 1, M2forward = 1;
 unsigned int M1_counter = 0, M2_counter = 0;
+unsigned int counterDistanceMeasure = 0, counterTrigger=0, counterEcho=0;
+unsigned char delayFront = 0, delayBack = 0, delayLeft = 0, delayRight=0;
+unsigned char frontDistance=0, backDistance=0, leftDistance=0, rightDistance=0; //in cms
 
 #define SERVOMAXPERIOD 200
 unsigned int servo_counter = 0, servo_period = 200;
@@ -91,10 +96,24 @@ int main(void)
 /* TIMER1 - now configured to interrupt at 10 khz (every 100us) */
 	OpenTimer1(T1_ON | T1_SOURCE_INT | T1_PS_1_1, T1_TICK);
 	ConfigIntTimer1(T1_INT_ON | T1_INT_PRIOR_2);
+/* TIMER2 - 20 khz interrupt for distance measure*/
+	OpenTimer2(T2_ON | T2_SOURCE_INT | T2_PS_1_1, T2_TICK);
+	ConfigIntTimer2(T2_INT_OFF | T2_INT_PRIOR_2); //It is off until trigger
 
 /* PORTA.0 for servo-PWM */
 	mPORTAClearBits(BIT_2);
 	mPORTASetPinsDigitalOut(BIT_2);
+
+/* some bits of PORTB for ultrasonic sensors */
+	PORTResetPins(IOPORT_B, BIT_8 | BIT_9| BIT_10 | BIT_11 );	
+	PORTSetPinsDigitalOut(IOPORT_B, BIT_8 | BIT_9| BIT_10 | BIT_11); //trigger
+	//PORTSetPinsDigitalIn(IOPORT_B, BIT_12 | BIT_13| BIT_14 | BIT_15); //echo
+
+/* external interrupts for echo signals */
+	ConfigINT1(EXT_INT_PRI_1 | RISING_EDGE_INT | EXT_INT_DISABLE); //RE8, highest priority
+	ConfigINT2(EXT_INT_PRI_2 | RISING_EDGE_INT | EXT_INT_DISABLE); //RE9
+	ConfigINT3(EXT_INT_PRI_3 | RISING_EDGE_INT | EXT_INT_DISABLE); //RA14
+	ConfigINT4(EXT_INT_PRI_4 | RISING_EDGE_INT | EXT_INT_DISABLE); //RA15
 
 /* PINS used for the buttons */
     PORTSetPinsDigitalIn(IOPORT_D, BIT_13);
@@ -119,10 +138,9 @@ int main(void)
 					BIT_8 | BIT_9 | BIT_10 | BIT_11); 		// Turn on PORTD on startup.
 	mPORTDSetPinsDigitalOut(BIT_4 | BIT_5 | BIT_6 | BIT_7 |
 					BIT_8 | BIT_9 | BIT_10 | BIT_11);	// Make PORTD output.
-/* PIN D.0 for LED */
-/*
-	mPORTDClearBits(BIT_0);
-	mPORTDSetPinsDigitalOut(BIT_0);
+/* PORTD for LEDs - DEBUGGING */
+/*	mPORTDClearBits(BIT_0 | BIT_1 | BIT_2);
+	mPORTDSetPinsDigitalOut(BIT_0 | BIT_1 | BIT_2);
 */
 
 // Explorer-16 uses UART2 to connect to the PC.
@@ -147,9 +165,29 @@ int main(void)
 // enable interrupts
     INTEnableInterrupts();
 
-	
+	counterDistanceMeasure=600; //measure distance each 60 ms
+
 	// Let interrupt handler do the work
 	while (1) {
+
+		if(counterDistanceMeasure==0){ //Measure distance with ultrasonic sensors
+			counterTrigger=1; //Sends trigger signal during 1 interrupt of timer2 (50us)
+			/*Reset echo time*/
+			delayFront=0;
+			delayBack=0;
+			delayLeft=0;
+			delayRight=0;
+			mPORTBSetBits(BIT_8 | BIT_9| BIT_10 | BIT_11);	//Sends trigger signal to the four sensors
+//		mPORTDSetBits(BIT_0); 	//DEBUGGING
+//		mPORTDClearBits(BIT_1);
+			ConfigIntTimer2(T2_INT_ON); //Starts timer2
+			/*Enable interrupts for echo signals*/
+			ConfigINT1(EXT_INT_ENABLE); //RE8, biggest priority
+			ConfigINT2(EXT_INT_ENABLE); //RE9
+			ConfigINT3(EXT_INT_ENABLE); //RA14
+			ConfigINT4(EXT_INT_ENABLE); //RA15
+			counterDistanceMeasure=600; //measure distance again
+		}
 
 		//Process UART command
 		switch (COMMAND) {
@@ -197,7 +235,7 @@ int main(void)
 		if (MotorsON) {
 			/****************************
 			MOTOR MAP
-				M1 O-------------O M2   ON EVEN MOTORS, STEPS MUST BE INVERTE
+				M1 O-------------O M2   ON EVEN MOTORS, STEPS MUST BE INVERTED
 					|	 /\		|			i.e. FORWARD IS BACKWARD
 					|	/  \	|
 					|	 || 	|
@@ -326,6 +364,51 @@ void __ISR(_TIMER_1_VECTOR, ipl2) Timer1Handler(void)
 		auxcounter--;
 }
 
+/* TIMER 2 Interrupt Handler - configured to 50us periods */
+void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
+{
+    // clear the interrupt flag
+    mT2ClearIntFlag();
+//						mPORTDSetBits(BIT_2); 	//DEBUGGING
+	counterTrigger--;
+	if(counterTrigger == 0){
+		mPORTBClearBits(BIT_8 | BIT_9| BIT_10 | BIT_11);	//Shut down trigger signal
+	}
+
+	//Until there is no echo answer
+	delayFront++;
+	delayBack++;
+	delayLeft++;
+	delayRight++;
+
+}
+
+void __ISR(_EXTERNAL_1_VECTOR, ipl7) INT1Interrupt() //Front sensor
+{ 
+   mINT1IntEnable(0);
+   mINT1ClearIntFlag();
+   frontDistance= delayFront*50/58; //us/58=cm
+mPORTDSetBits(BIT_1); 	//DEBUGGING
+mPORTDClearBits(BIT_0);
+}
+void __ISR(_EXTERNAL_2_VECTOR, ipl7) INT2Interrupt() 
+{ 
+   mINT2IntEnable(0);
+   mINT2ClearIntFlag();
+   backDistance=delayBack*50/58; //us/58=cm
+} 
+void __ISR(_EXTERNAL_3_VECTOR, ipl7) INT3Interrupt() 
+{ 
+   mINT3IntEnable(0);
+   mINT3ClearIntFlag();
+   leftDistance = delayLeft * 50/58; //us/58=cm
+} 
+void __ISR(_EXTERNAL_4_VECTOR, ipl7) INT4Interrupt() 
+{ 
+   mINT4IntEnable(0);
+   mINT4ClearIntFlag();
+   rightDistance = delayRight * 50/58; //us/58=cm
+}
 
 // UART 2 interrupt handler
 // it is set at priority level 2
@@ -372,7 +455,7 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl2) ChangeNotice_Handler(void)
     mCNClearIntFlag();
 
     // .. things to do .. 
-    if ( !(temp & (1<<13)) ) { //button on RB2 is pressed
+    if ( !(temp & (1<<13)) ) { //button on RD13 is pressed
 		if (MotorsON == 0)
 			MotorsON = 1;
 		else

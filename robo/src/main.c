@@ -55,6 +55,10 @@
 #define	GetInstructionClock()		(GetSystemClock())
 #define DESIRED_BAUDRATE    	(9600)      //The desired UART BaudRate
 
+#define SPC_front	10.6 		//Steps per cm.
+#define SPC_side	15.27
+#define SPD			2.619 		//Steps per degree
+
 /*****************************************************************************/
 
 
@@ -67,7 +71,7 @@ void step (unsigned char data, unsigned char motorNumber);
 
 /*************GLOBALS**********************/
 unsigned char COMMAND;
-unsigned char Path_Start = 0;
+unsigned char Path_State = 0;
 unsigned char MotorsON = 0;
 unsigned char M1forward = 1, M2forward = 1, M3forward = 1, M4forward = 1;
 unsigned int M1_counter = 0, M2_counter = 0, M3_counter = 0, M4_counter = 0;
@@ -85,7 +89,7 @@ int auxcounter = 10000; //for the servo?
 int main(void)
 {
 //LOCALS
-	unsigned int temp, slow = 1;
+	unsigned int temp;
 	unsigned int channel1, channel2;
 	unsigned int M1_stepPeriod, M2_stepPeriod, M3_stepPeriod, M4_stepPeriod;
 	M1_stepPeriod = M2_stepPeriod = M3_stepPeriod = M4_stepPeriod = 1000; // in tens of u-seconds
@@ -216,12 +220,6 @@ int main(void)
 				M1forward = 1;
 				M2forward = 0;
 				break;
-			case 'f':
-				slow = 0;
-				break;
-			case 'g':
-				slow = 1;
-				break;
 			
 			case 0:
 			default:
@@ -229,70 +227,67 @@ int main(void)
 		}
 		COMMAND = 0;
 */		
-		/****** Robot path state machine **********/
-		static int path_state = 0;
-		if (Path_Start) {
-			switch (path_state) {
-				case 0:
-					step_counter = 550;		//1 cm es aprox. = 11 pasos
+		/***************** Robot path state machine *****************/
+		switch (Path_State) {
+			case 0:
+				MotorsON = 0;
+				Path_State = 0;
+				step_counter = 0;
+				break;
+			case 1:
+				if (step_counter == 0) {
+					step_counter = 50 * SPC_front;		//1 cm es aprox. = 11 pasos
 					MotorsON = 1;
 					M1forward = M2forward = M3forward = M4forward= 1;
-					path_state = 1;
-					break;
-				case 1:
-					if (step_counter == 0) {
-						step_counter = 550;		//FALTA calcular cuantos pasos es un giro
-						MotorsON = 1;
-						M1forward = 0;
-						M2forward = 1;
-						M3forward = 0;
-						M4forward = 1;
-						path_state = 2;
-					}
-					break;
-				case 2:
-					if (step_counter == 0) {
-						step_counter = 550;
-						MotorsON = 1;
-						M1forward = M2forward = M3forward = M4forward= 1;
-						path_state = 3;
-					}
-					break;
-				case 3:
-					if (step_counter == 0) {
-						step_counter = 275;
-						MotorsON = 1;
-						M1forward = 0;
-						M2forward = 1;
-						M3forward = 0;
-						M4forward = 1;
-						path_state = 4;
-					}
-					break;
-				case 4:
-					if (step_counter == 0) {
-						MotorsON = 0;
-						path_state = 0;
-						Path_Start = 0;
-					}
-					break;
-			}
-		} else {
-			path_state = 0;
+					Path_State = 2;
+				}
+				break;
+			case 2:
+				if (step_counter == 0) {
+					step_counter = 180 * SPD;		//FALTA calcular cuantos pasos es un giro
+					MotorsON = 1;		//275 pasos giran aprox 105 grados
+					M1forward = 0;
+					M2forward = 1;
+					M3forward = 0;
+					M4forward = 1;
+					Path_State = 3;
+				}
+				break;
+			case 3:
+				if (step_counter == 0) {
+					step_counter = 50 * SPC_front;
+					MotorsON = 1;
+					M1forward = M2forward = M3forward = M4forward= 1;
+					Path_State = 4;
+				}
+				break;
+			case 4:
+				if (step_counter == 0) {
+					step_counter = 90 * SPD;
+					MotorsON = 1;
+					M1forward = 1;
+					M2forward = 0;
+					M3forward = 1;
+					M4forward = 0;
+					Path_State = 5;
+				}
+				break;
+			case 5:
+				if (step_counter == 0) {
+					step_counter = 50 * SPC_side; // lateralmente 550 pasos son: 36 cm
+					MotorsON = 1;
+					M1forward = M4forward = 1;
+					M2forward = M3forward = 0;
+					Path_State = 0;
+				}
+				break;
 		}
-		/******************************************/
+		/***************************************************************/
 
-		if ( slow ) {
-			M1_stepPeriod = 50; // value between 20 and 100 in tens of u-seconds (step period)
-			M2_stepPeriod = 50;
-			M3_stepPeriod = 50;
-			M4_stepPeriod = 50;
-		} else { //fast
-			M1_stepPeriod = 20; // value between 20 and 100 in tens of u-seconds
-			M2_stepPeriod = 20;
-			M3_stepPeriod = 20;
-			M4_stepPeriod = 20;
-		}
+		M1_stepPeriod = 50; // value between 50 and 100 in tens of u-seconds (step period)
+		M2_stepPeriod = 50;
+		M3_stepPeriod = 50; // influences the speed of the wheels
+		M4_stepPeriod = 50;
 			
 		if (MotorsON) {
 			/****************************
@@ -313,8 +308,8 @@ int main(void)
 						else
 							M1_state = 3;
 						break;
-					case 1: // set 0110
-						step (0x6 , 1);
+					case 1: // set 1001
+						step (0x9 , 1);
 						if (M1forward)
 							M1_state = 2;
 						else
@@ -327,9 +322,9 @@ int main(void)
 						else
 							M1_state = 1;
 						break;
-					case 3: // set 1001
+					case 3: // set 0110
 					default:
-						step (0x9 , 1);
+						step (0x6 , 1);
 						if (M1forward)
 							M1_state = 0;
 						else
@@ -349,8 +344,8 @@ int main(void)
 						else
 							M2_state = 3;
 						break;
-					case 1: // set 1001
-						step (0x9 , 2);
+					case 1: // set 0110
+						step (0x6 , 2);
 						if (M2forward)
 							M2_state = 2;
 						else
@@ -363,9 +358,9 @@ int main(void)
 						else
 							M2_state = 1;
 						break;
-					case 3: // set 0110
+					case 3: // set 1001
 					default:
-						step (0x6 , 2);
+						step (0x9 , 2);
 						if (M2forward)
 							M2_state = 0;
 						else
@@ -384,8 +379,8 @@ int main(void)
 						else
 							M3_state = 3;
 						break;
-					case 1: // set 0110
-						step (0x6 , 3);
+					case 1: // set 1001
+						step (0x9 , 3);
 						if (M3forward)
 							M3_state = 2;
 						else
@@ -398,9 +393,9 @@ int main(void)
 						else
 							M3_state = 1;
 						break;
-					case 3: // set 1001
+					case 3: // set 0110
 					default:
-						step (0x9 , 3);
+						step (0x6 , 3);
 						if (M3forward)
 							M3_state = 0;
 						else
@@ -419,8 +414,8 @@ int main(void)
 						else
 							M4_state = 3;
 						break;
-					case 1: // set 1001
-						step (0x9 , 4);
+					case 1: // set 0110
+						step (0x6 , 4);
 						if (M4forward)
 							M4_state = 2;
 						else
@@ -433,9 +428,9 @@ int main(void)
 						else
 							M4_state = 1;
 						break;
-					case 3: // set 0110
+					case 3: // set 1001
 					default:
-						step (0x6 , 4);
+						step (0x9 , 4);
 						if (M4forward)
 							M4_state = 0;
 						else
@@ -594,11 +589,10 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl2) ChangeNotice_Handler(void)
 
     // .. things to do .. 
     if ( !(temp & (1<<13)) ) { //button on RD13 is pressed
-		if (Path_Start == 0)
-			Path_Start = 1;
+		if (Path_State == 0)
+			Path_State = 1;
 		else {
-			Path_Start = 0;
-			MotorsON = 0;
+			Path_State = 0;
 		}
 	}
 	
@@ -609,7 +603,7 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl2) ChangeNotice_Handler(void)
 /************ PROCEDURES ********************/
 void step (unsigned char data, unsigned char motorNumber) {
 	data = data & 0x0F; // make sure only the LS-nibble will be overwritten
-	unsigned int lectura
+	unsigned int lectura;
 
 	switch (motorNumber) {
 		case 1:

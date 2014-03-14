@@ -26,7 +26,7 @@ SOLK=<src>|src\main.c||<obj>||<lib>||<lkr>||
 SuiteArgsString=
 ToolArgsString=-g
 TraceCmdString=
-DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PIC32MXSK=1
+DebugOptions=-D__DEBUG
 [File002]
 Location=C:\mplabProjects\robo\.\bin\robo.elf
 Folder=Output
@@ -65,7 +65,7 @@ SOLK=<src>|src\main.c||<obj>||<lib>||<lkr>||
 SuiteArgsString=
 ToolArgsString=-Map="$(BINDIR_)$(TARGETBASE).map" -o"$(BINDIR_)$(TARGETBASE).$(TARGETSUFFIX)"
 TraceCmdString=
-DebugOptions=--defsym=__MPLAB_DEBUG=1 --defsym=__MPLAB_DEBUGGER_PIC32MXSK=1
+DebugOptions=--defsym=__MPLAB_DEBUG=1
 [File005]
 Location=C:\Users\JCCR\Documents\GitHub\roboticsProject\robo\.\bin\robo.hex
 Folder=Output
@@ -78,7 +78,7 @@ SOLK=<src>|src\main.c||<obj>||<lib>||<lkr>||
 SuiteArgsString=
 ToolArgsString=-Map="$(BINDIR_)$(TARGETBASE).map" -o"$(BINDIR_)$(TARGETBASE).$(TARGETSUFFIX)"
 TraceCmdString=
-DebugOptions=--defsym=__MPLAB_DEBUG=1 --defsym=__MPLAB_DEBUGGER_PIC32MXSK=1
+DebugOptions=--defsym=__MPLAB_DEBUG=1
 [TOOL_LOC_STAMPS]
 tool_loc{430F471F-7ECB-4852-A80D-DEF9A5C8E751}=C:\Program Files (x86)\Microchip\MPLAB C32 Suite\bin\pic32-gcc.exe
 tool_loc{C68E5105-1196-4333-A0BF-3DC57271E614}=C:\Program Files (x86)\Microchip\MPLAB C32 Suite\bin\pic32-ld.exe

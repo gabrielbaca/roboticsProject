@@ -55,9 +55,9 @@
 #define	GetInstructionClock()		(GetSystemClock())
 #define DESIRED_BAUDRATE    	(9600)      //The desired UART BaudRate
 
-#define SPC_front	10.6 		//Steps per cm.
-#define SPC_side	15.27
-#define SPD			2.619 		//Steps per degree
+#define SPC_front	11.4777		//Steps per cm.
+#define SPC_side	14.7059
+#define SPD			3.408 		//Steps per degree
 
 /*****************************************************************************/
 
@@ -234,18 +234,18 @@ int main(void)
 				Path_State = 0;
 				step_counter = 0;
 				break;
-			case 1:
+			case 1:	//forward
 				if (step_counter == 0) {
-					step_counter = 50 * SPC_front;		//1 cm es aprox. = 11 pasos
+					step_counter = 50 * SPC_front; //1 cm es aprox. = 11.3636 pasos
 					MotorsON = 1;
 					M1forward = M2forward = M3forward = M4forward= 1;
 					Path_State = 2;
 				}
 				break;
-			case 2:
+			case 2:	//180 grados positivos (counter clockwise)
 				if (step_counter == 0) {
-					step_counter = 180 * SPD;		//FALTA calcular cuantos pasos es un giro
-					MotorsON = 1;		//275 pasos giran aprox 105 grados
+					step_counter = 180 * SPD; //1 grado = 3.3889 pasos
+					MotorsON = 1;		//610 pasos giran aprox 180 grados
 					M1forward = 0;
 					M2forward = 1;
 					M3forward = 0;
@@ -272,12 +272,17 @@ int main(void)
 					Path_State = 5;
 				}
 				break;
-			case 5:
+			case 5:		//lateral derecha
 				if (step_counter == 0) {
-					step_counter = 50 * SPC_side; // lateralmente 550 pasos son: 36 cm
+					step_counter = 50 * SPC_side; //1 cm lateral = 14.7059 pasos
 					MotorsON = 1;
 					M1forward = M4forward = 1;
 					M2forward = M3forward = 0;
+					Path_State = 6;
+				}
+				break;
+			case 6:
+				if (step_counter == 0) {
 					Path_State = 0;
 				}
 				break;

@@ -25,7 +25,7 @@ Mat complementedImage = Mat(imageHeight, imageWidth, CV_8UC3);
 Mat hsvImage = Mat(imageHeight, imageWidth, CV_8UC3);
 Mat binImageYellow = Mat(imageHeight, imageWidth, CV_8UC1);
 Mat binImageGreen = Mat(imageHeight, imageWidth, CV_8UC1);
-Mat binImageGreenDetail = Mat(imageHeight, imageWidth, CV_8UC1);
+Mat binImageDetail = Mat(imageHeight, imageWidth, CV_8UC1);
 Mat binImage = Mat(imageHeight, imageWidth, CV_8UC1);
 Mat filledImage = Mat(imageHeight, imageWidth, CV_8UC1);
 Mat grayImage = Mat(imageHeight, imageWidth, CV_8UC3);
@@ -42,7 +42,7 @@ int main()
 	VideoCapture cameraFeed;
 	vector<vector<Point>> contours;
 	vector<Vec4i> hierarchy;
-	Mat element = getStructuringElement(MORPH_RECT, Size(3, 3), Point(-1,-1));
+	Mat element = getStructuringElement(MORPH_RECT, Size(1, 1), Point(-1,-1));
 	Mat cannyOutput;
 	//Mat kernel = Mat::ones(Size(5, 5), CV_8UC1);
 	char key = ' ';
@@ -75,20 +75,36 @@ int main()
 			bitwise_not(gammaImage, complementedImage);
 			cvtColor(complementedImage, hsvImage, CV_BGR2HSV);
 			imshow("HSV", hsvImage);
-			//split(hsvImage, hsv_planes);
-			inRange(hsvImage, Scalar(85, 230, 185), Scalar(106, 255, 225), binImageYellow);
+			inRange(hsvImage, Scalar(85, 230, 180), Scalar(106, 255, 225), binImageYellow);
 			inRange(hsvImage, Scalar(90, 250, 5), Scalar(120, 255, 144), binImageGreen);
+			//inRange(hsvImage, Scalar(65, 90, 190), Scalar(91, 143, 225), binImageDetail);
 			bitwise_or(binImageYellow, binImageGreen, binImage);
+			//bitwise_or(binImageDetail, binImage, binImage);
 			//erode(binImage, filledImage, element);
 			morphologyEx(binImage, filledImage, MORPH_OPEN, element);
 			Canny(filledImage, cannyOutput, thresh, thresh *2, 3);
 			findContours(cannyOutput, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0,0));
+
+			  /// Get the moments
+			vector<Moments> mu(contours.size());
+			for(unsigned int i = 0; i < contours.size(); i++ )
+			{ 
+				mu[i] = moments( contours[i], false ); 
+			}
+
+			///  Get the mass centers:
+			vector<Point2f> mc( contours.size());
+			for(unsigned int i = 0; i < contours.size(); i++ )
+			{ 
+				mc[i] = Point2d( mu[i].m10/mu[i].m00 , mu[i].m01/mu[i].m00 ); 
+			}
 
 			Mat drawing = Mat::zeros( cannyOutput.size(), CV_8UC3);
 			for(unsigned int i = 0; i < contours.size(); i++ )
 			{
 			  Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255));
 			  drawContours(drawing, contours, i, color, 2, 8, hierarchy, 0, Point());
+			  circle(drawing, mc[i], 4, color, -1, 8, 0 );
 			}
 
 			imshow("Binary", filledImage);

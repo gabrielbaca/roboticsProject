@@ -2,7 +2,7 @@
  *
  *                  
  *
- *********************************************************************
+ **********************************************************************
  * FileName:        main.c
  * Dependencies:
  * Processor:       PIC32
@@ -55,6 +55,10 @@
 #define	GetInstructionClock()		(GetSystemClock())
 #define DESIRED_BAUDRATE    	(9600)      //The desired UART BaudRate
 
+#define SPC_front	10.6 		//Steps per cm.
+#define SPC_side	15.27
+#define SPD			2.619 		//Steps per degree
+
 /*****************************************************************************/
 
 
@@ -67,9 +71,10 @@ void step (unsigned char data, unsigned char motorNumber);
 
 /*************GLOBALS**********************/
 unsigned char COMMAND;
-unsigned char MotorsON = 1;
-unsigned char M1forward = 1, M2forward = 1;
-unsigned int M1_counter = 0, M2_counter = 0;
+unsigned char Path_State = 0;
+unsigned char MotorsON = 0;
+unsigned char M1forward = 1, M2forward = 1, M3forward = 1, M4forward = 1;
+unsigned int M1_counter = 0, M2_counter = 0, M3_counter = 0, M4_counter = 0;
 unsigned int counterDistanceMeasure = 0, counterTrigger=0, counterEcho=0;
 unsigned char delayFront = 0, delayBack = 0, delayLeft = 0, delayRight=0;
 unsigned char frontDistance=0, backDistance=0, leftDistance=0, rightDistance=0; //in cms
@@ -78,18 +83,18 @@ unsigned char frontDistance=0, backDistance=0, leftDistance=0, rightDistance=0; 
 unsigned int servo_counter = 0, servo_period = 200;
 int servo_angle = 0;
 
-int auxcounter = 10000;
+int auxcounter = 10000; //for the servo?
 /******************************************/
 
 int main(void)
 {
 //LOCALS
-	unsigned int temp, slow = 1;
+	unsigned int temp;
 	unsigned int channel1, channel2;
-	unsigned int M1_stepPeriod, M2_stepPeriod;
-	M1_stepPeriod = M2_stepPeriod = 1000; // in tens of u-seconds
-	unsigned char M1_state = 0, M2_state = 0;
-	
+	unsigned int M1_stepPeriod, M2_stepPeriod, M3_stepPeriod, M4_stepPeriod;
+	M1_stepPeriod = M2_stepPeriod = M3_stepPeriod = M4_stepPeriod = 1000; // in tens of u-seconds
+	unsigned char M1_state = 0, M2_state = 0, M3_state = 0, M4_state = 0;
+	unsigned int step_counter;
 
 	SYSTEMConfig(GetSystemClock(), SYS_CFG_WAIT_STATES | SYS_CFG_PCACHE);
 
@@ -133,11 +138,15 @@ int main(void)
 	//OpenADC10( PARAM1, PARAM2, PARAM3, PARAM4, PARAM5 );
 	//EnableADC10();
 
-/* PORT D for motors */
+/* PORT D and E for motors */
 	mPORTDSetBits(BIT_4 | BIT_5 | BIT_6 | BIT_7 |
 					BIT_8 | BIT_9 | BIT_10 | BIT_11); 		// Turn on PORTD on startup.
 	mPORTDSetPinsDigitalOut(BIT_4 | BIT_5 | BIT_6 | BIT_7 |
 					BIT_8 | BIT_9 | BIT_10 | BIT_11);	// Make PORTD output.
+	mPORTESetBits(BIT_0 | BIT_1 | BIT_2 | BIT_3 |
+					BIT_4 | BIT_5 | BIT_6 | BIT_7); 		// Turn on PORTE on startup.
+	mPORTESetPinsDigitalOut(BIT_0 | BIT_1 | BIT_2 | BIT_3 |
+					BIT_4 | BIT_5 | BIT_6 | BIT_7);	// Make PORTE output.
 /* PORTD for LEDs - DEBUGGING */
 /*	mPORTDClearBits(BIT_0 | BIT_1 | BIT_2);
 	mPORTDSetPinsDigitalOut(BIT_0 | BIT_1 | BIT_2);
@@ -188,7 +197,7 @@ int main(void)
 			ConfigINT4(EXT_INT_ENABLE); //RA15
 			counterDistanceMeasure=600; //measure distance again
 		}
-
+/*
 		//Process UART command
 		switch (COMMAND) {
 			case 'q':
@@ -211,65 +220,111 @@ int main(void)
 				M1forward = 1;
 				M2forward = 0;
 				break;
-			case 'f':
-				slow = 0;
-				break;
-			case 'g':
-				slow = 1;
-				break;
 			
 			case 0:
 			default:
 				break;
 		}
 		COMMAND = 0;
-		
-		if ( slow ) {
-			M1_stepPeriod = 50; // value between 20 and 100 in tens of u-seconds (step period)
-			M2_stepPeriod = 50;
-		} else { //fast
-			M1_stepPeriod = 20; // value between 20 and 100 in tens of u-seconds
-			M2_stepPeriod = 20;
+*/		
+		/***************** Robot path state machine *****************/
+		switch (Path_State) {
+			case 0:
+				MotorsON = 0;
+				Path_State = 0;
+				step_counter = 0;
+				break;
+			case 1:
+				if (step_counter == 0) {
+					step_counter = 50 * SPC_front;		//1 cm es aprox. = 11 pasos
+					MotorsON = 1;
+					M1forward = M2forward = M3forward = M4forward= 1;
+					Path_State = 2;
+				}
+				break;
+			case 2:
+				if (step_counter == 0) {
+					step_counter = 180 * SPD;		//FALTA calcular cuantos pasos es un giro
+					MotorsON = 1;		//275 pasos giran aprox 105 grados
+					M1forward = 0;
+					M2forward = 1;
+					M3forward = 0;
+					M4forward = 1;
+					Path_State = 3;
+				}
+				break;
+			case 3:
+				if (step_counter == 0) {
+					step_counter = 50 * SPC_front;
+					MotorsON = 1;
+					M1forward = M2forward = M3forward = M4forward= 1;
+					Path_State = 4;
+				}
+				break;
+			case 4:
+				if (step_counter == 0) {
+					step_counter = 90 * SPD;
+					MotorsON = 1;
+					M1forward = 1;
+					M2forward = 0;
+					M3forward = 1;
+					M4forward = 0;
+					Path_State = 5;
+				}
+				break;
+			case 5:
+				if (step_counter == 0) {
+					step_counter = 50 * SPC_side; // lateralmente 550 pasos son: 36 cm
+					MotorsON = 1;
+					M1forward = M4forward = 1;
+					M2forward = M3forward = 0;
+					Path_State = 0;
+				}
+				break;
 		}
+		/***************************************************************/
+
+		M1_stepPeriod = 50; // value between 50 and 100 in tens of u-seconds (step period)
+		M2_stepPeriod = 50;
+		M3_stepPeriod = 50; // influences the speed of the wheels
+		M4_stepPeriod = 50;
 			
 		if (MotorsON) {
 			/****************************
 			MOTOR MAP
-				M1 O-------------O M2   ON EVEN MOTORS, STEPS MUST BE INVERTED
+				M1 O-------------O M2   ON EVEN MOTORS, STEPS MUST BE INVERTE
 					|	 /\		|			i.e. FORWARD IS BACKWARD
 					|	/  \	|
 					|	 || 	|
 					|	 ||		|
-				M2 O-------------O M1
+				M3 O-------------O M4
 			*****************************/
 			if (M1_counter == 0) {
 				switch (M1_state) {
 					case 0: // set 0011
-//		mPORTDSetBits(BIT_0);					//for debugging
 						step (0x3 , 1);
 						if (M1forward)
 							M1_state = 1;
 						else
 							M1_state = 3;
 						break;
-					case 1: // set 0110
-						step (0x6 , 1);
+					case 1: // set 1001
+						step (0x9 , 1);
 						if (M1forward)
 							M1_state = 2;
 						else
 							M1_state = 0;
 						break;
 					case 2: // set 1100
-//		mPORTDClearBits(BIT_0);					//for debugging
 						step (0xC , 1);
 						if (M1forward)
 							M1_state = 3;
 						else
 							M1_state = 1;
 						break;
-					case 3: // set 1001
+					case 3: // set 0110
 					default:
-						step (0x9 , 1);
+						step (0x6 , 1);
 						if (M1forward)
 							M1_state = 0;
 						else
@@ -277,6 +332,7 @@ int main(void)
 						break;	
 				}
 				M1_counter = M1_stepPeriod;
+				step_counter--;
 			}
 			
 			if (M2_counter == 0) {
@@ -288,8 +344,8 @@ int main(void)
 						else
 							M2_state = 3;
 						break;
-					case 1: // set 1001
-						step (0x9 , 2);
+					case 1: // set 0110
+						step (0x6 , 2);
 						if (M2forward)
 							M2_state = 2;
 						else
@@ -302,9 +358,9 @@ int main(void)
 						else
 							M2_state = 1;
 						break;
-					case 3: // set 0110
+					case 3: // set 1001
 					default:
-						step (0x6 , 2);
+						step (0x9 , 2);
 						if (M2forward)
 							M2_state = 0;
 						else
@@ -314,9 +370,82 @@ int main(void)
 				M2_counter = M2_stepPeriod;
 			}
 
+			if (M3_counter == 0) {
+				switch (M3_state) {
+					case 0: // set 0011
+						step (0x3 , 3);
+						if (M3forward)
+							M3_state = 1;
+						else
+							M3_state = 3;
+						break;
+					case 1: // set 1001
+						step (0x9 , 3);
+						if (M3forward)
+							M3_state = 2;
+						else
+							M3_state = 0;
+						break;
+					case 2: // set 1100
+						step (0xC , 3);
+						if (M3forward)
+							M3_state = 3;
+						else
+							M3_state = 1;
+						break;
+					case 3: // set 0110
+					default:
+						step (0x6 , 3);
+						if (M3forward)
+							M3_state = 0;
+						else
+							M3_state = 2;
+						break;	
+				}
+				M3_counter = M3_stepPeriod;
+			}
+			
+			if (M4_counter == 0) {
+				switch (M4_state) {
+					case 0: // set 0011
+						step (0x3 , 4);
+						if (M4forward)
+							M4_state = 1;
+						else
+							M4_state = 3;
+						break;
+					case 1: // set 0110
+						step (0x6 , 4);
+						if (M4forward)
+							M4_state = 2;
+						else
+							M4_state = 0;
+						break;
+					case 2: // set 1100
+						step (0xC , 4);
+						if (M4forward)
+							M4_state = 3;
+						else
+							M4_state = 1;
+						break;
+					case 3: // set 1001
+					default:
+						step (0x9 , 4);
+						if (M4forward)
+							M4_state = 0;
+						else
+							M4_state = 2;
+						break;	
+				}
+				M4_counter = M4_stepPeriod;
+			}
+			if (step_counter == 0)
+				MotorsON = 0;
 		} else {
 			mPORTDSetBits(BIT_4 | BIT_5 | BIT_6 | BIT_7 |
 					BIT_8 | BIT_9 | BIT_10 | BIT_11);
+			mPORTESetBits(BIT_0 | BIT_1 | BIT_2 | BIT_3 |
+					BIT_4 | BIT_5 | BIT_6 | BIT_7);
 		}
 		
 		/******* SERVO CONTROL ********/
@@ -353,6 +482,10 @@ void __ISR(_TIMER_1_VECTOR, ipl2) Timer1Handler(void)
 		M1_counter--;
 	if (M2_counter != 0)
 		M2_counter--;
+	if (M3_counter != 0)
+		M3_counter--;
+	if (M4_counter != 0)
+		M4_counter--;
 	
 	if (servo_period != 0) {
 		servo_period--;
@@ -456,10 +589,11 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl2) ChangeNotice_Handler(void)
 
     // .. things to do .. 
     if ( !(temp & (1<<13)) ) { //button on RD13 is pressed
-		if (MotorsON == 0)
-			MotorsON = 1;
-		else
-			MotorsON = 0;
+		if (Path_State == 0)
+			Path_State = 1;
+		else {
+			Path_State = 0;
+		}
 	}
 	
 }
@@ -469,9 +603,21 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl2) ChangeNotice_Handler(void)
 /************ PROCEDURES ********************/
 void step (unsigned char data, unsigned char motorNumber) {
 	data = data & 0x0F; // make sure only the LS-nibble will be overwritten
-	unsigned int lectura = mPORTDRead() & (~(0xF << motorNumber*4));
-	
-	mPORTDWrite(lectura | (data << motorNumber*4));
+	unsigned int lectura;
+
+	switch (motorNumber) {
+		case 1:
+		case 2:
+			lectura = mPORTDRead() & (~(0xF << motorNumber*4));
+			mPORTDWrite(lectura | (data << motorNumber*4));
+			break;
+		case 3:
+		case 4:
+			motorNumber -= 3;
+			lectura = mPORTERead() & (~(0xF << motorNumber*4));
+			mPORTEWrite(lectura | (data << motorNumber*4));
+			break;
+	}
 }
 
 void WriteString(const char *string)

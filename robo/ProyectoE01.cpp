@@ -1,12 +1,12 @@
-#include <opencv2\core\core.hpp>
-#include <opencv2\highgui\highgui.hpp>
-#include <opencv2\imgproc\imgproc.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 #include <fstream>
 #include <iostream>
-#include <Windows.h>
 #include <queue>
-#define imageHeight 480
-#define imageWidth 640
+#include "RaspiCamCV.h"
+#define imageHeight 240
+#define imageWidth 320
 using std::cout;
 using std::cin;
 using std::endl;
@@ -25,7 +25,6 @@ Mat complementedImage = Mat(imageHeight, imageWidth, CV_8UC3);
 Mat hsvImage = Mat(imageHeight, imageWidth, CV_8UC3);
 Mat binImageYellow = Mat(imageHeight, imageWidth, CV_8UC1);
 Mat binImageGreen = Mat(imageHeight, imageWidth, CV_8UC1);
-Mat binImageDetail = Mat(imageHeight, imageWidth, CV_8UC1);
 Mat binImage = Mat(imageHeight, imageWidth, CV_8UC1);
 Mat filledImage = Mat(imageHeight, imageWidth, CV_8UC1);
 Mat grayImage = Mat(imageHeight, imageWidth, CV_8UC3);
@@ -39,29 +38,20 @@ void print();
 
 int main()
 {
-	VideoCapture cameraFeed;
-	vector<vector<Point>> contours;
+	RaspiCamCvCapture * raspiCam = raspiCamCvCreateCameraCapture(0);
+	//VideoCapture cameraFeed;
+	vector<vector<Point> > contours;
 	vector<Vec4i> hierarchy;
-	Mat element = getStructuringElement(MORPH_RECT, Size(1, 1), Point(-1,-1));
+	Mat element = getStructuringElement(MORPH_RECT, Size(11, 23), Point(-1,-1));
 	Mat cannyOutput;
 	//Mat kernel = Mat::ones(Size(5, 5), CV_8UC1);
 	char key = ' ';
-	double gamma = 0.1;
-	int counter = 0;
 	int thresh = 100;
 	char freeze = 0;
-	cameraFeed.open(0);
-	//namedWindow("Camera Feed");
-	//namedWindow("Complemented image");
-	//namedWindow("HSV");
-	//setMouseCallback("Complemented image", mouseCoordinates);
-	//setMouseCallback("HSV", mouseCoordinates);
-	//imshow("Camera Feed", currentImage);
+	printf("\033[2J\033[1;1H");
 	
 	while(key != 27)
 	{
-	//	system("cls");
-	//	print();
 		if(key == 'f')
 		{
 			freeze = !freeze;
@@ -69,59 +59,23 @@ int main()
 		}
 		if(!freeze)
 		{
-			cameraFeed >> currentImage;
+			//cameraFeed >> currentImage;
+			IplImage* imagenPi = raspiCamCvQueryFrame(raspiCam);
+			currentImage = cvarrToMat(imagenPi);
+			//imshow("Camara", currentImage);
 			deteccion_fuego(currentImage);
-			//gammaImage = correctGamma(currentImage, 0.2);
-			////complementImage(gammaImage, complementedImage);
-			//bitwise_not(gammaImage, complementedImage);
-			//imshow("comple", complementedImage);
-			//cvtColor(complementedImage, hsvImage, CV_BGR2HSV);
-			//imshow("HSV", hsvImage);
-			//inRange(hsvImage, Scalar(85, 230, 180), Scalar(106, 255, 225), binImageYellow);
-			//inRange(hsvImage, Scalar(90, 250, 5), Scalar(120, 255, 144), binImageGreen);
-			////inRange(hsvImage, Scalar(65, 90, 190), Scalar(91, 143, 225), binImageDetail);
-			//bitwise_or(binImageYellow, binImageGreen, binImage);
-			////bitwise_or(binImageDetail, binImage, binImage);
-			////erode(binImage, filledImage, element);
-			//morphologyEx(binImage, filledImage, MORPH_OPEN, element);
-			//Canny(filledImage, cannyOutput, thresh, thresh *2, 3);
-			//findContours(cannyOutput, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0,0));
-
-			//  /// Get the moments
-			//vector<Moments> mu(contours.size());
-			//for(unsigned int i = 0; i < contours.size(); i++ )
-			//{ 
-			//	mu[i] = moments( contours[i], false ); 
-			//}
-
-			/////  Get the mass centers:
-			//vector<Point2f> mc( contours.size());
-			//for(unsigned int i = 0; i < contours.size(); i++ )
-			//{ 
-			//	mc[i] = Point2d( mu[i].m10/mu[i].m00 , mu[i].m01/mu[i].m00 ); 
-			//}
-
-			//Mat drawing = Mat::zeros( cannyOutput.size(), CV_8UC3);
-			//for(unsigned int i = 0; i < contours.size(); i++ )
-			//{
-			//  Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255));
-			//  drawContours(drawing, contours, i, color, 2, 8, hierarchy, 0, Point());
-			//  circle(drawing, mc[i], 4, color, -1, 8, 0 );
-			//}
-
-			//imshow("Binary", filledImage);
-			//imshow("Contours", drawing);
 		}
 		key = waitKey(15);
 		//Sleep(15);
 	}
+	raspiCamCvReleaseCapture(&raspiCam);
 	return 0;
 }
 void print()
 {
-	cout << "X: " << coordinateX << ", Y: " << coordinateY << endl; 
-	cout << "R: " << redClick << ", G: " << greenClick << ", B: " << blueClick << endl;
-	cout << "H: " << hueClick << ", S: " << saturationClick << ", V: " << valueClick << endl;
+	//cout << "X: " << coordinateX << ", Y: " << coordinateY << endl; 
+	//cout << "R: " << redClick << ", G: " << greenClick << ", B: " << blueClick << endl;
+	cout << "H: " << hueClick << ", S: " << saturationClick << ", V: " << valueClick << endl << endl;
 }
 
 void mouseCoordinates(int event, int x, int y, int flags, void* param)
@@ -141,16 +95,18 @@ void mouseCoordinates(int event, int x, int y, int flags, void* param)
             coordinateX = x;
             coordinateY = y;
             redClick = currentImage.at<Vec3b>(y, x)[2];
-	        greenClick = currentImage.at<Vec3b>(y, x)[1];
-	        blueClick = currentImage.at<Vec3b>(y, x)[0];
+			greenClick = currentImage.at<Vec3b>(y, x)[1];
+			blueClick = currentImage.at<Vec3b>(y, x)[0];
 
 			hueClick = hsvImage.at<Vec3b>(y, x)[0];
-	        saturationClick = hsvImage.at<Vec3b>(y, x)[1];
-	        valueClick = hsvImage.at<Vec3b>(y, x)[2];
+			saturationClick = hsvImage.at<Vec3b>(y, x)[1];
+			valueClick = hsvImage.at<Vec3b>(y, x)[2];
 			print();
+			/*  Draw a point */
+            //points.push_back(Point(x, y));
             break;
         case CV_EVENT_RBUTTONDOWN:
-			system("cls");
+			printf("\033[2J\033[1;1H");
             break;
     }
 }
@@ -171,7 +127,7 @@ Mat correctGamma(Mat &img, double gamma) {
 
 void deteccion_fuego(Mat frame){
 	int dilation_size = 0;
-	vector<vector<Point>> contours;
+	vector<vector<Point> > contours;
 	Mat canny_output;
 	Mat thr1(frame.rows, frame.cols, CV_8UC1);
 	Mat src_gray; 
@@ -184,33 +140,33 @@ void deteccion_fuego(Mat frame){
 	Mat element = getStructuringElement(MORPH_RECT, Size(2 * dilation_size + 1, 2 * dilation_size + 1), Point(dilation_size, dilation_size));
 	morphologyEx(thr1, thr1, MORPH_CLOSE , element);
 
-	imshow("Camara",frame);	
+	//imshow("Camara",frame);	
 	imshow("Threshold", thr1);
 	waitKey(30);
 	
- 
-	/// Find contours
-	findContours( thr1, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0) );
+	// Find contours
+	findContours(thr1, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
  
 	//cout<<" "<<endl;
 	vector<Rect> boundRect(contours.size());
-	vector<vector<Point> > contours_poly(contours.size());
+	vector<vector<Point> > contours_poly( contours.size() );
 
 	/// Draw contours
-	Mat drawing = Mat::zeros(thr1.size(), CV_8UC3);
-	if (contours.size()>0)
+	Mat drawing = Mat::zeros(thr1.size(), CV_8UC3 );
+	if (contours.size() > 0)
 	//for( int i = 0; i< contours.size()-contours.size()/2; i++ )
 	{
 		double a = contourArea(contours[0], false);  //  Find the area of contour
 		if(a > 5)
 		{					  //25
-			system("cls");
-			cout<<"Fuego detectado"<<endl;
+			//system("cls");
+			printf("\033[2J\033[1;1H");
+			cout << "Fuego detectado" << endl;
 			//waitKey(150);
 			//fire(Pic18);
-			drawContours(thr1, contours, 0,  Scalar( 255, 255, 255), 2, 8, hierarchy, 0, Point());
+			drawContours( thr1, contours, 0,  Scalar( 255, 255, 255), 2, 8, hierarchy, 0, Point() );
 			//cout<<"p1"<<endl;
-			approxPolyDP(Mat(contours[0]), contours_poly[0], 3, true );
+			approxPolyDP( Mat(contours[0]), contours_poly[0], 3, true);
 			//cout<<"p2"<<endl;
 			boundRect[0] = boundingRect(Mat(contours_poly[0]));
 			//cout<<"p3"<<endl;
@@ -261,14 +217,21 @@ void deteccion_fuego(Mat frame){
 		}
 		else
 		{
-			system("cls");
+			//system("cls");
+			printf("\033[2J\033[1;1H");
 			cout << "Flama no encontrada" << endl;
-			//rectangle(frame, aux.tl(), aux.br(), Scalar( 0, 0, 255), 2, 8, 0 );
+			//rectangle(frame, aux.tl(), aux.br(), Scalar(0, 0, 255), 2, 8, 0);
 			//rectangle(drawing, boundRect[0].tl(), boundRect[0].br(), Scalar(0, 0, 0), 2, 8, 0);
 			//imshow("Flama detectada", frame);
 		}
 	//system("cls");
 	//imshow("Flama detectada", frame);
-	//imshow( "Contours", drawing );
+	//imshow("Contours", drawing );
+	}
+	else
+	{
+		printf("\033[2j\033[1;1H");
+		cout << "Flama no encontrada" << endl;
 	}
 }
+

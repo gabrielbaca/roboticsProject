@@ -46,11 +46,12 @@
 #define	GetSystemClock() 	(80000000ul)
 #define SYS_FREQ 			(80000000L)
 #define PB_DIV         		8
-#define PB2_DIV				4
+//#define PB2_DIV				4
 #define PRESCALE       		1
-#define TOGGLES_PER_SEC		10000
+#define TOGGLES_PER_SEC		10000	//Hz
+#define TOOGLES_PER_SEC2	20000 	//Hz
 #define T1_TICK       		(SYS_FREQ/PB_DIV/PRESCALE/TOGGLES_PER_SEC)
-#define T2_TICK				(SYS_FREQ/PB2_DIV/PRESCALE/TOGGLES_PER_SEC)
+#define T2_TICK				(SYS_FREQ/PB_DIV/PRESCALE/TOGGLES_PER_SEC2)
 #define	GetPeripheralClock()		(GetSystemClock()/(1 << OSCCONbits.PBDIV))
 #define	GetInstructionClock()		(GetSystemClock())
 #define DESIRED_BAUDRATE    	(9600)      //The desired UART BaudRate
@@ -242,14 +243,12 @@ int main(void)
 					Path_State = 2;
 				}
 				break;
-			case 2:	//180 grados positivos (counter clockwise)
+			case 2:
 				if (step_counter == 0) {
-					step_counter = 180 * SPD; //1 grado = 3.3889 pasos
+					step_counter = 90 * SPD; //1 grado = 3.3889 pasos
 					MotorsON = 1;		//610 pasos giran aprox 180 grados
-					M1forward = 0;
-					M2forward = 1;
-					M3forward = 0;
-					M4forward = 1;
+					M1forward = M3forward = 1;	//giro ccw (a la derecha m1m3=1)
+					M2forward = M4forward = 0;
 					Path_State = 3;
 				}
 				break;
@@ -257,31 +256,62 @@ int main(void)
 				if (step_counter == 0) {
 					step_counter = 50 * SPC_front;
 					MotorsON = 1;
-					M1forward = M2forward = M3forward = M4forward= 1;
+					M1forward = M2forward = M3forward = M4forward= 0;
 					Path_State = 4;
 				}
 				break;
 			case 4:
 				if (step_counter == 0) {
-					step_counter = 90 * SPD;
+					step_counter = 180 * SPD;
 					MotorsON = 1;
-					M1forward = 1;
-					M2forward = 0;
-					M3forward = 1;
-					M4forward = 0;
+					M1forward = M3forward = 0;	//izq
+					M2forward = M4forward = 1;
 					Path_State = 5;
 				}
 				break;
-			case 5:		//lateral derecha
+			case 5:
 				if (step_counter == 0) {
-					step_counter = 50 * SPC_side; //1 cm lateral = 14.7059 pasos
+					step_counter = 50 * SPC_front;
 					MotorsON = 1;
-					M1forward = M4forward = 1;
-					M2forward = M3forward = 0;
+					M1forward = M2forward = M3forward = M4forward= 1;
 					Path_State = 6;
 				}
 				break;
 			case 6:
+				if (step_counter == 0) {
+					step_counter = 90 * SPD;
+					MotorsON = 1;
+					M1forward = M3forward = 0;	//izq
+					M2forward = M4forward = 1;
+					Path_State = 7;
+				}
+				break;
+			case 7:
+				if (step_counter == 0) {
+					step_counter = 50 * SPC_front;
+					MotorsON = 1;
+					M1forward = M2forward = M3forward = M4forward= 0;
+					Path_State = 8;
+				}
+				break;
+			case 8:
+				if (step_counter == 0) {
+					step_counter = 180 * SPD;
+					MotorsON = 1;
+					M1forward = M3forward = 1; //derecha
+					M2forward = M4forward = 0;
+					Path_State = 9;
+				}
+				break;
+			case 9:
+				if (step_counter == 0) {
+					step_counter = 50 * SPC_front;
+					MotorsON = 1;
+					M1forward = M2forward = M3forward = M4forward= 1;
+					Path_State = 10;
+				}
+				break;
+			default:
 				if (step_counter == 0) {
 					Path_State = 0;
 				}

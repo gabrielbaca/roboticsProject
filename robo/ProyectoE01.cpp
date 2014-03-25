@@ -20,19 +20,9 @@ int minRed = 0, minBlue = 0, minGreen = 0;
 int nClicks = 0;
 RNG rng(12345);
 Mat currentImage = Mat(imageHeight, imageWidth, CV_8UC3);
-Mat gammaImage = Mat(imageHeight, imageWidth, CV_8UC3);
-Mat complementedImage = Mat(imageHeight, imageWidth, CV_8UC3);
-Mat hsvImage = Mat(imageHeight, imageWidth, CV_8UC3);
-Mat binImageYellow = Mat(imageHeight, imageWidth, CV_8UC1);
-Mat binImageGreen = Mat(imageHeight, imageWidth, CV_8UC1);
-Mat binImage = Mat(imageHeight, imageWidth, CV_8UC1);
-Mat filledImage = Mat(imageHeight, imageWidth, CV_8UC1);
-Mat grayImage = Mat(imageHeight, imageWidth, CV_8UC3);
 
 void mouseCoordinates(int event, int x, int y, int flags, void* param);
 Mat correctGamma(Mat &img, double gamma);
-void complementImage(const Mat &sourceImage, Mat &destinationImage);
-void thresholdImage(const Mat &sourceImage, Mat &destinationImage);
 void deteccion_fuego(Mat frame);
 void print();
 
@@ -44,9 +34,7 @@ int main()
 	vector<Vec4i> hierarchy;
 	Mat element = getStructuringElement(MORPH_RECT, Size(11, 23), Point(-1,-1));
 	Mat cannyOutput;
-	//Mat kernel = Mat::ones(Size(5, 5), CV_8UC1);
 	char key = ' ';
-	int thresh = 100;
 	char freeze = 0;
 	printf("\033[2J\033[1;1H");
 	
@@ -73,8 +61,6 @@ int main()
 }
 void print()
 {
-	//cout << "X: " << coordinateX << ", Y: " << coordinateY << endl; 
-	//cout << "R: " << redClick << ", G: " << greenClick << ", B: " << blueClick << endl;
 	cout << "H: " << hueClick << ", S: " << saturationClick << ", V: " << valueClick << endl << endl;
 }
 
@@ -102,8 +88,6 @@ void mouseCoordinates(int event, int x, int y, int flags, void* param)
 			saturationClick = hsvImage.at<Vec3b>(y, x)[1];
 			valueClick = hsvImage.at<Vec3b>(y, x)[2];
 			print();
-			/*  Draw a point */
-            //points.push_back(Point(x, y));
             break;
         case CV_EVENT_RBUTTONDOWN:
 			printf("\033[2J\033[1;1H");
@@ -139,49 +123,33 @@ void deteccion_fuego(Mat frame){
 	//Canny( thr1, canny_output, 255, 255, 3);
 	Mat element = getStructuringElement(MORPH_RECT, Size(2 * dilation_size + 1, 2 * dilation_size + 1), Point(dilation_size, dilation_size));
 	morphologyEx(thr1, thr1, MORPH_CLOSE , element);
-
-	//imshow("Camara",frame);	
+	
 	imshow("Threshold", thr1);
 	waitKey(30);
 	
 	// Find contours
 	findContours(thr1, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
  
-	//cout<<" "<<endl;
 	vector<Rect> boundRect(contours.size());
 	vector<vector<Point> > contours_poly( contours.size() );
 
 	/// Draw contours
 	Mat drawing = Mat::zeros(thr1.size(), CV_8UC3 );
 	if (contours.size() > 0)
-	//for( int i = 0; i< contours.size()-contours.size()/2; i++ )
 	{
 		double a = contourArea(contours[0], false);  //  Find the area of contour
 		if(a > 5)
-		{					  //25
+		{	
 			//system("cls");
 			printf("\033[2J\033[1;1H");
-			cout << "Fuego detectado" << endl;
-			//waitKey(150);
-			//fire(Pic18);
-			drawContours( thr1, contours, 0,  Scalar( 255, 255, 255), 2, 8, hierarchy, 0, Point() );
-			//cout<<"p1"<<endl;
+			cout << "Fuego detectado" << endl; // Report to PIC32
+			drawContours(thr1, contours, 0,  Scalar(255, 255, 255), 2, 8, hierarchy, 0, Point());
 			approxPolyDP( Mat(contours[0]), contours_poly[0], 3, true);
-			//cout<<"p2"<<endl;
 			boundRect[0] = boundingRect(Mat(contours_poly[0]));
-			//cout<<"p3"<<endl;
 			//waitKey();
 			aux = boundRect[0];
 			if (boundRect[0].width / boundRect[0].height <= 1)
 			{
-				// cout<<"p4"<<endl;
-				//rectangle( drawing, boundRect[0].tl(), boundRect[0].br(), Scalar( 255, 255, 255), 2, 8, 0 );
-				//cout<<"p5"<<endl;
-				//rectangle( frame, boundRect[0].tl(), boundRect[0].br(), Scalar( 0, 0, 255), 2, 8, 0 );
-		
-				//cout<<"boundRect[0].x"<<boundRect[0].x<<endl;
-				//cout<<"boundRect[0].y"<<boundRect[0].y<<endl;
-				//waitKey();
 		
 				if(boundRect[0].x > (frame.cols / 3) * 2) 
 				{
@@ -220,13 +188,7 @@ void deteccion_fuego(Mat frame){
 			//system("cls");
 			printf("\033[2J\033[1;1H");
 			cout << "Flama no encontrada" << endl;
-			//rectangle(frame, aux.tl(), aux.br(), Scalar(0, 0, 255), 2, 8, 0);
-			//rectangle(drawing, boundRect[0].tl(), boundRect[0].br(), Scalar(0, 0, 0), 2, 8, 0);
-			//imshow("Flama detectada", frame);
 		}
-	//system("cls");
-	//imshow("Flama detectada", frame);
-	//imshow("Contours", drawing );
 	}
 	else
 	{

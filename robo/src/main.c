@@ -46,14 +46,14 @@
 #define	GetSystemClock() 	(80000000ul)
 #define SYS_FREQ 			(80000000L)
 #define PB_DIV         		8
-#define PB2_DIV				4
 #define PRESCALE       		1
-#define TOGGLES_PER_SEC		10000
+#define TOGGLES_PER_SEC		10000	//Hz
+#define TOGGLES_PER_SEC2	100000 	//Hz
 #define T1_TICK       		(SYS_FREQ/PB_DIV/PRESCALE/TOGGLES_PER_SEC)
-#define T2_TICK				(SYS_FREQ/PB2_DIV/PRESCALE/TOGGLES_PER_SEC)
+#define T2_TICK				(SYS_FREQ/PB_DIV/PRESCALE/TOGGLES_PER_SEC2)
 #define	GetPeripheralClock()		(GetSystemClock()/(1 << OSCCONbits.PBDIV))
 #define	GetInstructionClock()		(GetSystemClock())
-#define DESIRED_BAUDRATE    	(9600)      //The desired UART BaudRate
+#define BAUD    	(9600)      //The desired UART BaudRate
 
 #define SPC_front	11.4777		//Steps per cm.
 #define SPC_side	14.7059
@@ -71,19 +71,27 @@ void step (unsigned char data, unsigned char motorNumber);
 
 /*************GLOBALS**********************/
 unsigned char COMMAND;
-unsigned char Path_State = 0;
+unsigned char Robo_State = 0;
 unsigned char MotorsON = 0;
 unsigned char M1forward = 1, M2forward = 1, M3forward = 1, M4forward = 1;
 unsigned int M1_counter = 0, M2_counter = 0, M3_counter = 0, M4_counter = 0;
-unsigned int counterDistanceMeasure = 0, counterTrigger=0, counterEcho=0;
-unsigned char delayFront = 0, delayBack = 0, delayLeft = 0, delayRight=0;
-unsigned char frontDistance=0, backDistance=0, leftDistance=0, rightDistance=0; //in cms
 
-#define SERVOMAXPERIOD 200
-unsigned int servo_counter = 0, servo_period = 200;
-int servo_angle = 0;
+// for ultrasonics
+unsigned int counterDistanceMeasure = 0, counterTrigger=6;
+unsigned short frontDistance=0, backDistance=0, leftDistance=0, rightDistance=0; //in cms
+unsigned short timeFront = 0, timeBack = 0, timeLeft = 0, timeRight=0;
+unsigned short delayFront = 0, delayBack = 0, delayLeft = 0, delayRight=0;
+unsigned volatile char timesReadIC1, timesReadIC2, timesReadIC3, timesReadIC4 = 0;
+unsigned volatile int D8, D9, D10, D11 = 0;
 
-int auxcounter = 10000; //for the servo?
+// for servos
+#define SERVOMAXPERIOD 200 // * 100us = 20ms
+unsigned int servo1_counter = 0, servo1_period = 200;
+int servo1_angle = 0;
+unsigned int servo2_counter = 0, servo2_period = 200;
+int servo2_angle = 0;
+
+int auxcounter = 10000; //for the servo, just for testing
 /******************************************/
 
 int main(void)
@@ -101,64 +109,57 @@ int main(void)
 /* TIMER1 - now configured to interrupt at 10 khz (every 100us) */
 	OpenTimer1(T1_ON | T1_SOURCE_INT | T1_PS_1_1, T1_TICK);
 	ConfigIntTimer1(T1_INT_ON | T1_INT_PRIOR_2);
-/* TIMER2 - 20 khz interrupt for distance measure*/
+/* TIMER2 - 100 khz interrupt for distance measure*/
 	OpenTimer2(T2_ON | T2_SOURCE_INT | T2_PS_1_1, T2_TICK);
-	ConfigIntTimer2(T2_INT_OFF | T2_INT_PRIOR_2); //It is off until trigger
+	ConfigIntTimer2(T2_INT_ON | T2_INT_PRIOR_3); //It is off until trigger
 
-/* PORTA.0 for servo-PWM */
-	mPORTAClearBits(BIT_2);
-	mPORTASetPinsDigitalOut(BIT_2);
+/* PORTA b2 and b3 for servo-PWM */
+	mPORTAClearBits(BIT_2 | BIT_3);
+	mPORTASetPinsDigitalOut(BIT_2 | BIT_3);
 
-/* some bits of PORTB for ultrasonic sensors */
+/* ULTRASONICS: some bits of PORTB for ultrasonic sensors */
 	PORTResetPins(IOPORT_B, BIT_8 | BIT_9| BIT_10 | BIT_11 );	
 	PORTSetPinsDigitalOut(IOPORT_B, BIT_8 | BIT_9| BIT_10 | BIT_11); //trigger
-	//PORTSetPinsDigitalIn(IOPORT_B, BIT_12 | BIT_13| BIT_14 | BIT_15); //echo
+/* Input Capture pins for echo signals */
+	//interrupt on every risging/falling edge starting with a rising edge
+	PORTSetPinsDigitalIn(IOPORT_D, BIT_8| BIT_9| BIT_10| BIT_11); //INC1, INC2, INC3, INC4 Pin
+	mIC1ClearIntFlag();
+	OpenCapture1(  IC_EVERY_EDGE | IC_INT_1CAPTURE | IC_TIMER2_SRC | IC_ON );//front
+	ConfigIntCapture1(IC_INT_ON | IC_INT_PRIOR_4 | IC_INT_SUB_PRIOR_3);
+	OpenCapture2(  IC_EVERY_EDGE | IC_INT_1CAPTURE | IC_TIMER2_SRC | IC_ON );//back
+	ConfigIntCapture2(IC_INT_ON | IC_INT_PRIOR_4 | IC_INT_SUB_PRIOR_3);
+	OpenCapture3(  IC_EVERY_EDGE | IC_INT_1CAPTURE | IC_TIMER2_SRC | IC_ON );//left
+	ConfigIntCapture3(IC_INT_ON | IC_INT_PRIOR_4 | IC_INT_SUB_PRIOR_3);
+	OpenCapture4(  IC_EVERY_EDGE | IC_INT_1CAPTURE | IC_TIMER2_SRC | IC_ON );//right
+	ConfigIntCapture4(IC_INT_ON | IC_INT_PRIOR_4 | IC_INT_SUB_PRIOR_3);
 
-/* external interrupts for echo signals */
-	ConfigINT1(EXT_INT_PRI_1 | RISING_EDGE_INT | EXT_INT_DISABLE); //RE8, highest priority
-	ConfigINT2(EXT_INT_PRI_2 | RISING_EDGE_INT | EXT_INT_DISABLE); //RE9
-	ConfigINT3(EXT_INT_PRI_3 | RISING_EDGE_INT | EXT_INT_DISABLE); //RA14
-	ConfigINT4(EXT_INT_PRI_4 | RISING_EDGE_INT | EXT_INT_DISABLE); //RA15
-
-/* PINS used for the buttons */
+/* PINS used for the START (RD13) BUTTON */
     PORTSetPinsDigitalIn(IOPORT_D, BIT_13);
 	#define CONFIG          (CN_ON | CN_IDLE_CON)
 	#define INTERRUPT       (CHANGE_INT_ON | CHANGE_INT_PRI_2)
 	mCNOpen(CONFIG, CN19_ENABLE, CN19_PULLUP_ENABLE);
 	temp = mPORTDRead();
 
-/* Analog input */
-	CloseADC10();
-	//#define PARAM1 ADC_MODULE_ON | ADC_FORMAT_INTG32 | ADC_CLK_AUTO | ADC_AUTO_SAMPLING_ON
-	//#define PARAM2 ADC_VREF_AVDD_AVSS | ADC_SCAN_ON | ADC_SAMPLES_PER_INT_2 | ADC_BUF_16 | ADC_ALT_INPUT_OFF
-	//#define PARAM3 ADC_CONV_CLK_INTERNAL_RC | ADC_SAMPLE_TIME_5
-	//#define PARAM4	ENABLE_AN0_ANA | ENABLE_AN1_ANA
-	//#define PARAM5	SKIP_SCAN_AN2 | SKIP_SCAN_AN3 | SKIP_SCAN_AN4 | SKIP_SCAN_AN5 | SKIP_SCAN_AN6 | SKIP_SCAN_AN7 | SKIP_SCAN_AN8 | SKIP_SCAN_AN9 | SKIP_SCAN_AN10 | SKIP_SCAN_AN11 | SKIP_SCAN_AN12 | SKIP_SCAN_AN13 | SKIP_SCAN_AN14 | SKIP_SCAN_AN15
-	//SetChanADC10( ADC_CH0_NEG_SAMPLEA_NVREF | ADC_CH0_POS_SAMPLEA_AN0);
-	//OpenADC10( PARAM1, PARAM2, PARAM3, PARAM4, PARAM5 );
-	//EnableADC10();
-
 /* PORT D and E for motors */
-	mPORTDSetBits(BIT_4 | BIT_5 | BIT_6 | BIT_7 |
-					BIT_8 | BIT_9 | BIT_10 | BIT_11); 		// Turn on PORTD on startup.
-	mPORTDSetPinsDigitalOut(BIT_4 | BIT_5 | BIT_6 | BIT_7 |
-					BIT_8 | BIT_9 | BIT_10 | BIT_11);	// Make PORTD output.
+	//motor 1
+	mPORTDSetBits(BIT_4 | BIT_5 | BIT_6 | BIT_7); 		// Turn on PORTD on startup.
+	mPORTDSetPinsDigitalOut(BIT_4 | BIT_5 | BIT_6 | BIT_7);	// Make PORTD output.
+	//motor 2
+	mPORTCSetBits(BIT_1 | BIT_2 | BIT_3 | BIT_4); 		// Turn on PORTC on startup.
+	mPORTCSetPinsDigitalOut(BIT_1 | BIT_2 | BIT_3 | BIT_4);	// Make PORTC output.
+	//motor 3 and 4
 	mPORTESetBits(BIT_0 | BIT_1 | BIT_2 | BIT_3 |
 					BIT_4 | BIT_5 | BIT_6 | BIT_7); 		// Turn on PORTE on startup.
 	mPORTESetPinsDigitalOut(BIT_0 | BIT_1 | BIT_2 | BIT_3 |
 					BIT_4 | BIT_5 | BIT_6 | BIT_7);	// Make PORTE output.
-/* PORTD for LEDs - DEBUGGING */
-/*	mPORTDClearBits(BIT_0 | BIT_1 | BIT_2);
-	mPORTDSetPinsDigitalOut(BIT_0 | BIT_1 | BIT_2);
-*/
 
-// Explorer-16 uses UART2 to connect to the PC.
+// UART2 to connect to the PC.
 	// This initialization assumes 36MHz Fpb clock. If it changes,
 	// you will have to modify baud rate initializer.
     UARTConfigure(UART2, UART_ENABLE_PINS_TX_RX_ONLY);
     UARTSetFifoMode(UART2, UART_INTERRUPT_ON_TX_NOT_FULL | UART_INTERRUPT_ON_RX_NOT_EMPTY);
     UARTSetLineControl(UART2, UART_DATA_SIZE_8_BITS | UART_PARITY_NONE | UART_STOP_BITS_1);
-    UARTSetDataRate(UART2, GetPeripheralClock(), DESIRED_BAUDRATE);
+    UARTSetDataRate(UART2, GetPeripheralClock(), BAUD);
     UARTEnable(UART2, UART_ENABLE_FLAGS(UART_PERIPHERAL | UART_RX | UART_TX));
 	// Configure UART2 RX Interrupt
 	INTEnable(INT_SOURCE_UART_RX(UART2), INT_ENABLED);
@@ -166,7 +167,12 @@ int main(void)
     INTSetVectorSubPriority(INT_VECTOR_UART(UART2), INT_SUB_PRIORITY_LEVEL_0);
 
 
+/* PORTD for LEDs - DEBUGGING */
+/*	mPORTDClearBits(BIT_0 | BIT_1 | BIT_2);
+	mPORTDSetPinsDigitalOut(BIT_0 | BIT_1 | BIT_2);
+*/
 	
+
 // Congifure Change/Notice Interrupt Flag
 	ConfigIntCN(INTERRUPT);
 // configure for multi-vectored mode
@@ -174,29 +180,11 @@ int main(void)
 // enable interrupts
     INTEnableInterrupts();
 
-	counterDistanceMeasure=600; //measure distance each 60 ms
 
-	// Let interrupt handler do the work
+	counterDistanceMeasure=600; //measure ULTRASONICS distance each 60 ms
+
 	while (1) {
 
-		if(counterDistanceMeasure==0){ //Measure distance with ultrasonic sensors
-			counterTrigger=1; //Sends trigger signal during 1 interrupt of timer2 (50us)
-			/*Reset echo time*/
-			delayFront=0;
-			delayBack=0;
-			delayLeft=0;
-			delayRight=0;
-			mPORTBSetBits(BIT_8 | BIT_9| BIT_10 | BIT_11);	//Sends trigger signal to the four sensors
-//		mPORTDSetBits(BIT_0); 	//DEBUGGING
-//		mPORTDClearBits(BIT_1);
-			ConfigIntTimer2(T2_INT_ON); //Starts timer2
-			/*Enable interrupts for echo signals*/
-			ConfigINT1(EXT_INT_ENABLE); //RE8, biggest priority
-			ConfigINT2(EXT_INT_ENABLE); //RE9
-			ConfigINT3(EXT_INT_ENABLE); //RA14
-			ConfigINT4(EXT_INT_ENABLE); //RA15
-			counterDistanceMeasure=600; //measure distance again
-		}
 /*
 		//Process UART command
 		switch (COMMAND) {
@@ -226,12 +214,12 @@ int main(void)
 				break;
 		}
 		COMMAND = 0;
-*/		
-		/***************** Robot path state machine *****************/
-		switch (Path_State) {
+*/	
+		/***************** Robot MAIN state machine *****************/
+		switch (Robo_State) {
 			case 0:
 				MotorsON = 0;
-				Path_State = 0;
+				Robo_State = 0;
 				step_counter = 0;
 				break;
 			case 1:	//forward
@@ -239,51 +227,80 @@ int main(void)
 					step_counter = 50 * SPC_front; //1 cm es aprox. = 11.3636 pasos
 					MotorsON = 1;
 					M1forward = M2forward = M3forward = M4forward= 1;
-					Path_State = 2;
+					Robo_State = 2;
 				}
 				break;
-			case 2:	//180 grados positivos (counter clockwise)
+			case 2:
 				if (step_counter == 0) {
-					step_counter = 180 * SPD; //1 grado = 3.3889 pasos
+					step_counter = 90 * SPD; //1 grado = 3.3889 pasos
 					MotorsON = 1;		//610 pasos giran aprox 180 grados
-					M1forward = 0;
-					M2forward = 1;
-					M3forward = 0;
-					M4forward = 1;
-					Path_State = 3;
+					M1forward = M3forward = 1;	//giro ccw (a la derecha m1m3=1)
+					M2forward = M4forward = 0;
+					Robo_State = 3;
 				}
 				break;
 			case 3:
 				if (step_counter == 0) {
 					step_counter = 50 * SPC_front;
 					MotorsON = 1;
-					M1forward = M2forward = M3forward = M4forward= 1;
-					Path_State = 4;
+					M1forward = M2forward = M3forward = M4forward= 0;
+					Robo_State = 4;
 				}
 				break;
 			case 4:
 				if (step_counter == 0) {
-					step_counter = 90 * SPD;
+					step_counter = 180 * SPD;
 					MotorsON = 1;
-					M1forward = 1;
-					M2forward = 0;
-					M3forward = 1;
-					M4forward = 0;
-					Path_State = 5;
+					M1forward = M3forward = 0;	//izq
+					M2forward = M4forward = 1;
+					Robo_State = 5;
 				}
 				break;
-			case 5:		//lateral derecha
+			case 5:
 				if (step_counter == 0) {
-					step_counter = 50 * SPC_side; //1 cm lateral = 14.7059 pasos
+					step_counter = 50 * SPC_front;
 					MotorsON = 1;
-					M1forward = M4forward = 1;
-					M2forward = M3forward = 0;
-					Path_State = 6;
+					M1forward = M2forward = M3forward = M4forward= 1;
+					Robo_State = 6;
 				}
 				break;
 			case 6:
 				if (step_counter == 0) {
-					Path_State = 0;
+					step_counter = 90 * SPD;
+					MotorsON = 1;
+					M1forward = M3forward = 0;	//izq
+					M2forward = M4forward = 1;
+					Robo_State = 7;
+				}
+				break;
+			case 7:
+				if (step_counter == 0) {
+					step_counter = 50 * SPC_front;
+					MotorsON = 1;
+					M1forward = M2forward = M3forward = M4forward= 0;
+					Robo_State = 8;
+				}
+				break;
+			case 8:
+				if (step_counter == 0) {
+					step_counter = 180 * SPD;
+					MotorsON = 1;
+					M1forward = M3forward = 1; //derecha
+					M2forward = M4forward = 0;
+					Robo_State = 9;
+				}
+				break;
+			case 9:
+				if (step_counter == 0) {
+					step_counter = 50 * SPC_front;
+					MotorsON = 1;
+					M1forward = M2forward = M3forward = M4forward= 1;
+					Robo_State = 10;
+				}
+				break;
+			default:
+				if (step_counter == 0) {
+					Robo_State = 0;
 				}
 				break;
 		}
@@ -447,26 +464,44 @@ int main(void)
 			if (step_counter == 0)
 				MotorsON = 0;
 		} else {
-			mPORTDSetBits(BIT_4 | BIT_5 | BIT_6 | BIT_7 |
-					BIT_8 | BIT_9 | BIT_10 | BIT_11);
+			//motors off
+			mPORTDSetBits(BIT_4 | BIT_5 | BIT_6 | BIT_7);
+			mPORTCSetBits(BIT_1 | BIT_2 | BIT_3 | BIT_4);
 			mPORTESetBits(BIT_0 | BIT_1 | BIT_2 | BIT_3 |
 					BIT_4 | BIT_5 | BIT_6 | BIT_7);
 		}
 		
-		/******* SERVO CONTROL ********/
+		/******* TEST CODE, toggles the servos (from 90 deg. to -90 deg.) every 1 s. ********/
 		if (auxcounter == 0) {
-			if (servo_angle == 90)
-				servo_angle = -90;
+			if (servo1_angle == 90)
+				servo1_angle = -90;
 			else
-				servo_angle = 90;
+				servo1_angle = 90;
+
+			if (servo2_angle == 90)
+				servo2_angle = -90;
+			else
+				servo2_angle = 90;
+
 			auxcounter = 10000;		// toggle angle every 1 s.
 		}
+		/***********************************************************************************/
 
-		servo_counter = (servo_angle + 90)*(18)/180 + 6; // between 600 and 2400 us
-
-		if (servo_period == 0) {
+		/******* SERVO CONTROL ********/
+		/*
+			Changing the global servoX_angle at any point in the code will 
+			move the servo to the desired angle.
+		*/
+		servo1_counter = (servo1_angle + 90)*(18)/180 + 6; // between 600 and 2400 us
+		if (servo1_period == 0) {
 			mPORTASetBits(BIT_2);
-			servo_period = SERVOMAXPERIOD; 		/* 200 * 100us = 20000us period  */
+			servo1_period = SERVOMAXPERIOD; 		/* 200 * 100us = 20000us period  */
+		}
+
+		servo2_counter = (servo2_angle + 90)*(18)/180 + 6; // between 600 and 2400 us
+		if (servo2_period == 0) {
+			mPORTASetBits(BIT_3);
+			servo2_period = SERVOMAXPERIOD; 		/* 200 * 100us = 20000us period  */
 		}
 		/*******************************/
 	
@@ -492,61 +527,142 @@ void __ISR(_TIMER_1_VECTOR, ipl2) Timer1Handler(void)
 	if (M4_counter != 0)
 		M4_counter--;
 	
-	if (servo_period != 0) {
-		servo_period--;
-		if (servo_period == (SERVOMAXPERIOD - servo_counter))
+	if (servo1_period != 0) {
+		servo1_period--;
+		if (servo1_period == (SERVOMAXPERIOD - servo1_counter))
 			mPORTAClearBits(BIT_2);
 	}
+	if (servo2_period != 0) {
+		servo2_period--;
+		if (servo2_period == (SERVOMAXPERIOD - servo2_counter))
+			mPORTAClearBits(BIT_3);
+	}
+
+	if(counterDistanceMeasure !=0)
+		counterDistanceMeasure--;
+	else {
+		counterTrigger = 6;
+		counterDistanceMeasure = 600;
+	}
+
 
 	if (auxcounter != 0)
 		auxcounter--;
 }
 
 /* TIMER 2 Interrupt Handler - configured to 50us periods */
-void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
+void __ISR(_TIMER_2_VECTOR, ipl3) Timer2Handler(void)
 {
     // clear the interrupt flag
     mT2ClearIntFlag();
-//						mPORTDSetBits(BIT_2); 	//DEBUGGING
 	counterTrigger--;
+	if(counterTrigger==5){
+		mPORTBSetBits(BIT_8 | BIT_9| BIT_10 | BIT_11);	//Sends trigger signal to the four sensors
+	}
 	if(counterTrigger == 0){
 		mPORTBClearBits(BIT_8 | BIT_9| BIT_10 | BIT_11);	//Shut down trigger signal
 	}
-
-	//Until there is no echo answer
+	
 	delayFront++;
 	delayBack++;
-	delayLeft++;
 	delayRight++;
+	delayLeft++;
 
 }
 
-void __ISR(_EXTERNAL_1_VECTOR, ipl7) INT1Interrupt() //Front sensor
-{ 
-   mINT1IntEnable(0);
-   mINT1ClearIntFlag();
-   frontDistance= delayFront*50/58; //us/58=cm
-mPORTDSetBits(BIT_1); 	//DEBUGGING
-mPORTDClearBits(BIT_0);
+/******************** ULTRASONICS ***********************/
+void __ISR(_INPUT_CAPTURE_1_VECTOR, ipl4) IC1Handler(void)
+{
+    // clear the interrupt flag
+    //mIC5ClearIntFlag();
+	INTClearFlag(INT_IC1);
+	//mPORTDSetBits(BIT_2); 	//DEBUGGING
+	D8 = PORTReadBits(IOPORT_D, BIT_8);
+	if(D8>0 && timesReadIC1==0){
+		//mPORTDSetBits(BIT_0); 
+		timeFront=delayFront;
+		timesReadIC1++;
+	}
+	
+	if(D8==0 && timesReadIC1==1){
+		//mPORTDSetBits(BIT_1); 
+		timeFront= delayFront - timeFront;
+		timesReadIC1=0;
+		frontDistance= timeFront * 10.0 / 58.0; //counterTimer2*periodTimer2 (10us)/58 = cm;
+		delayFront=0;
+	}
+
 }
-void __ISR(_EXTERNAL_2_VECTOR, ipl7) INT2Interrupt() 
-{ 
-   mINT2IntEnable(0);
-   mINT2ClearIntFlag();
-   backDistance=delayBack*50/58; //us/58=cm
-} 
-void __ISR(_EXTERNAL_3_VECTOR, ipl7) INT3Interrupt() 
-{ 
-   mINT3IntEnable(0);
-   mINT3ClearIntFlag();
-   leftDistance = delayLeft * 50/58; //us/58=cm
-} 
-void __ISR(_EXTERNAL_4_VECTOR, ipl7) INT4Interrupt() 
-{ 
-   mINT4IntEnable(0);
-   mINT4ClearIntFlag();
-   rightDistance = delayRight * 50/58; //us/58=cm
+
+void __ISR(_INPUT_CAPTURE_2_VECTOR, ipl4) IC2Handler(void)
+{
+    // clear the interrupt flag
+    //mIC5ClearIntFlag();
+	INTClearFlag(INT_IC2);
+	//mPORTDSetBits(BIT_2); 	//DEBUGGING
+	D9 = PORTReadBits(IOPORT_D, BIT_9);
+	if(D9>0 && timesReadIC2==0){
+		//mPORTDSetBits(BIT_0); 
+		timeBack=delayBack;
+		timesReadIC2++;
+	}
+	
+	if(D9==0 && timesReadIC2==1){
+		//mPORTDSetBits(BIT_1); 
+		timeBack= delayBack - timeBack;
+		timesReadIC2=0;
+		backDistance= timeBack * 10.0 / 58.0; //counterTimer2*periodTimer2 (10us)/58 = cm;
+		delayBack=0;
+	}
+
 }
+
+void __ISR(_INPUT_CAPTURE_3_VECTOR, ipl4) IC3Handler(void)
+{
+    // clear the interrupt flag
+    //mIC5ClearIntFlag();
+	INTClearFlag(INT_IC3);
+	//mPORTDSetBits(BIT_2); 	//DEBUGGING
+	D10 = PORTReadBits(IOPORT_D, BIT_10);
+	if(D10>0 && timesReadIC3==0){
+		//mPORTDSetBits(BIT_0); 
+		timeLeft=delayLeft;
+		timesReadIC3++;
+	}
+	
+	if(D10==0 && timesReadIC3==1){
+		//mPORTDSetBits(BIT_1); 
+		timeLeft= delayLeft - timeLeft;
+		timesReadIC3=0;
+		leftDistance= timeLeft * 10.0 / 58.0; //counterTimer2*periodTimer2 (10us)/58 = cm;
+		delayLeft=0;
+	}
+
+}
+
+void __ISR(_INPUT_CAPTURE_4_VECTOR, ipl4) IC4Handler(void)
+{
+    // clear the interrupt flag
+    //mIC5ClearIntFlag();
+	INTClearFlag(INT_IC4);
+	//mPORTDSetBits(BIT_2); 	//DEBUGGING
+	D11 = PORTReadBits(IOPORT_D, BIT_11);
+	if(D11>0 && timesReadIC4==0){
+		//mPORTDSetBits(BIT_0); 
+		timeRight=delayRight;
+		timesReadIC4++;
+	}
+	
+	if(D11==0 && timesReadIC4==1){
+		//mPORTDSetBits(BIT_1); 
+		timeRight= delayRight - timeRight;
+		timesReadIC4=0;
+		rightDistance= timeRight * 10.0 / 58.0; //counterTimer2*periodTimer2 (10us)/58 = cm;
+		delayRight=0;
+	}
+
+}
+/***********************END of ULTRASONICS********************/
 
 // UART 2 interrupt handler
 // it is set at priority level 2
@@ -594,10 +710,10 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl2) ChangeNotice_Handler(void)
 
     // .. things to do .. 
     if ( !(temp & (1<<13)) ) { //button on RD13 is pressed
-		if (Path_State == 0)
-			Path_State = 1;
+		if (Robo_State == 0)
+			Robo_State = 1;
 		else {
-			Path_State = 0;
+			Robo_State = 0;
 		}
 	}
 	
@@ -612,9 +728,12 @@ void step (unsigned char data, unsigned char motorNumber) {
 
 	switch (motorNumber) {
 		case 1:
+			lectura = mPORTDRead() & (~(0xF << 4));
+			mPORTDWrite(lectura | (data << 4));
+			break;
 		case 2:
-			lectura = mPORTDRead() & (~(0xF << motorNumber*4));
-			mPORTDWrite(lectura | (data << motorNumber*4));
+			lectura = mPORTCRead() & (~(0xF << 1));
+			mPORTCWrite(lectura | (data << 1));
 			break;
 		case 3:
 		case 4:

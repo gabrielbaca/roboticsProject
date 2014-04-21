@@ -83,14 +83,11 @@ unsigned char TestDog(char reset);
 unsigned char GoToRoom4short(char reset);
 unsigned char GoToRoom4long(char reset);
 unsigned char BackToStart(char reset);
-unsigned char GoToRoom1(char reset);
 /***************************************/
 
 
 /*************GLOBALS**********************/
-char COMMAND = 0;
-
-// for motors
+unsigned char COMMAND;
 unsigned char Robo_State = 0;
 unsigned char MotorsON = 0;
 unsigned char M1forward = 1, M2forward = 1, M3forward = 1, M4forward = 1;
@@ -205,7 +202,37 @@ int main(void)
 	counterDistanceMeasure=600; //measure ULTRASONICS distance each 60 ms
 
 	while (1) {
-	
+
+/*
+		//Process UART command
+		switch (COMMAND) {
+			case 'q':
+				if (MotorsON)
+					MotorsON = 0;
+				else
+					MotorsON = 1;
+				break;
+			case 'w':
+				M1forward = M2forward = 1;
+				break;
+			case 's':
+				M1forward = M2forward = 0;
+				break;
+			case 'a': //left
+				M1forward = 0;
+				M2forward = 1;
+				break;
+			case 'd': //right
+				M1forward = 1;
+				M2forward = 0;
+				break;
+			
+			case 0:
+			default:
+				break;
+		}
+		COMMAND = 0;
+*/	
 /***************** Robot MAIN state machine *****************/
 		unsigned char ret = 0;
 		switch (Robo_State) {
@@ -213,24 +240,48 @@ int main(void)
 				MotorsON = 0;
 				Robo_State = 0;
 
+				InvInitialOrientation(RESET);
+				TestDog(RESET);
+				GoToRoom4short(RESET);
+				BackToStart(RESET);
 				InitialOrientation(RESET);
 				GoToCenter(RESET);
-				GoToRoom1(RESET);
+				GoToRoom4long(RESET);
 				break;
 			case 1:
-				ret = InitialOrientation(GO);
+				ret = InvInitialOrientation(GO);
 				if (ret == 1) {
 					Robo_State = 2;
 				}
 				break;
 			case 2:
-				ret = GoToCenter(GO);
+				ret = TestDog(GO);
 				if (ret == 1) {
-					Robo_State = 3;
+					Robo_State = 3;		//DOG not found
+				} else if (ret == 2) {
+					Robo_State = 4;		//DOG found
 				}
 				break;
 			case 3:
-				ret = GoToRoom1(GO);
+				ret = GoToRoom4short(GO);
+				if (ret == 1) {
+					Robo_State = 0;
+				}
+				break;
+			case 4:
+				ret = BackToStart(GO);
+				if (ret == 1) {
+					Robo_State = 5;
+				}
+				break;
+			case 5:
+				ret = GoToCenter(GO);
+				if (ret == 1) {
+					Robo_State = 6;
+				}
+				break;
+			case 6:
+				ret = GoToRoom4long(GO);
 				if (ret == 1) {
 					Robo_State = 0;
 				}
@@ -611,24 +662,24 @@ void __ISR(_INPUT_CAPTURE_4_VECTOR, ipl4) IC4Handler(void)
 }
 /***********************END of ULTRASONICS********************/
 
-
 // UART 2 interrupt handler
 // it is set at priority level 2
-
 void __ISR(_UART2_VECTOR, ipl2) IntUart2Handler(void)
 {
 	// Is this an RX interrupt?
 	if(INTGetFlag(INT_SOURCE_UART_RX(UART2)))
 	{
+		unsigned char databyte;
 
 		// Clear the RX interrupt Flag
 	    INTClearFlag(INT_SOURCE_UART_RX(UART2));
 
 		// Code to be executed on RX interrupt:
-		COMMAND = UARTGetDataByte(UART2);
+		databyte = UARTGetDataByte(UART2);
+		databyte++;
 		
 		// Echo what we just received.
-		PutCharacter(COMMAND);
+		PutCharacter(databyte);
 	}
 
 	// We don't care about TX interrupt
@@ -638,10 +689,10 @@ void __ISR(_UART2_VECTOR, ipl2) IntUart2Handler(void)
 		INTClearFlag(INT_SOURCE_UART_TX(UART2));
 
 		// Code to be executed on TX interrupt:
-			//none
+
+		
 	}
 }
-
 
 // Configure the CN interrupt handler
 
@@ -1407,44 +1458,55 @@ unsigned char TestDog(char reset) {
 				go('F');
 				goSlow();
 				MotorsON = 1;
-				//step_counter[1] = 30 * SPC_front;
-				//countingDirection = 'F';
-				state = 99;
+				step_counter[1] = 30 * SPC_front;
+				countingDirection = 'F';
+				state = 1;
 				break;
-			case 99:
-				if (backDistance > 22) {
-					go('L');
-					state = 1;
-				}
 			case 1:
-				if (leftDistance < 6) {
+				if (leftDistance < 8) {
+					step_counter[0] = 2 * SPC_side;
+					go('R');
 					state = 2;
+				}/*
+				else if (leftDistance > 8 && leftDistance < 10) {
+					step_counter[0] = 1 * SPC_side;
+					go('L');
+					state = 3;
+				}*/
+				else if (leftDistance > 11) {
+					step_counter[0] = 2 * SPC_side;
+					go('L');
+					state = 4;
 				}
 
-				if (frontDistance < 40) {
+				if (frontDistance < 25) {
 					state = 6;	// DOG FOUND
+				}
+
+				if (step_counter[1] == 0) {
+					state = 5;	// DOG NOT FOUND
 				}
 				break;
 			case 2:
-				go('R');
-				state = 3;
+				if (step_counter[0] == 0) {
+					step_counter[0] = 2 * SPD;
+					go('O');
+					state = 4;
+				}
 				break;
 			case 3:
-				if (leftDistance > 20) {
-					state = 5;
-				}
-				if (frontDistance < 40) {
-					state = 6;	// DOG FOUND
+				if (step_counter[0] == 0) {
+					step_counter[0] = 2 * SPD;
+					go('K');
+					state = 4;
 				}
 				break;
-		/*
 			case 4:
 				if (step_counter[0] == 0) {
 					go('F');
 					state = 1;
 				}
 				break;
-		*/
 			case 5:
 				MotorsON = 0;
 				state = 0;
@@ -1469,53 +1531,9 @@ unsigned char GoToRoom4short(char reset) {
 	else {
 		switch (state) {
 			case 0:
-				step_counter[1] = 20 * SPC_front;
-				countingDirection = 'F';
 				go('F');
 				MotorsON = 1;
-				state = 99;
-				break;
-			case 99:
-				if (leftDistance < 8) {
-					step_counter[0] = 2 * SPC_side;
-					go('R');
-					state = 98;
-				}/*
-				else if (leftDistance > 8 && leftDistance < 10) {
-					step_counter[0] = 1 * SPC_side;
-					go('L');
-					state = 97;
-				}*/
-				else if (leftDistance > 11) {
-					step_counter[0] = 2 * SPC_side;
-					go('L');
-					state = 96;
-				}
-
-				if (step_counter[1] == 0) {
-					go('F');
-					state = 1;
-				}
-				break;
-			case 98:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('O');
-					state = 96;
-				}
-				break;
-			case 97:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('K');
-					state = 96;
-				}
-				break;
-			case 96:
-				if (step_counter[0] == 0) {
-					go('F');
-					state = 99;
-				}
+				state = 1;
 				break;
 			case 1:
 				if (leftDistance < 8) {
@@ -1845,137 +1863,6 @@ unsigned char BackToStart(char reset) {
 			case 5:
 				if (step_counter[0] == 0) {
 					state = 6;
-				}
-				break;
-			default:
-				MotorsON = 0;
-				state = 0;
-				return 1;
-				break;
-		}
-	}
-	return 0;
-}
-
-unsigned char GoToRoom1(char reset) {
-	static int state = 0;
-	if (reset) 
-		state = 0;
-	else {
-		switch (state) {
-			case 0:
-				go('F');
-				MotorsON = 1;
-				state = 1;
-				break;
-			case 1:
-				if (rightDistance < 8) {
-					step_counter[0] = 2 * SPC_side;
-					go('L');
-					state = 99;
-				}
-				else if (leftDistance < 8) {
-					step_counter[0] = 2 * SPC_side;
-					go('R');
-					state = 98;
-				}
-
-				if (leftDistance < 25) { // passing the thin wall
-					step_counter[1] = 23 * SPC_front;
-					countingDirection = 'F';
-					go('F');
-					state = 3;
-				}
-				break;
-			case 99:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('K');
-					state = 2;
-				}
-				break;
-			case 98:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('O');
-					state = 2;
-				}
-				break;
-			case 2:
-				if (step_counter[0] == 0) {
-					go('F');
-					state = 1;
-				}
-				break;
-			case 3:
-				if (rightDistance < 8) {
-					step_counter[0] = 2 * SPC_side;
-					go('L');
-					state = 4;
-				} else if (leftDistance < 8) {
-					step_counter[0] = 2 * SPC_side;
-					go('R');
-					state = 4;
-				}
-
-				if (step_counter[1] == 0) { // passed the wall
-					step_counter[0] = 90 * SPD;
-					go('K');
-					state = 5;
-				}
-				break;
-			case 4:
-				if (step_counter[0] == 0) {
-					go('F');
-					state = 3;
-				}
-				break;
-			case 5:
-				if (step_counter[0] == 0) {
-					go('F');
-					state = 6;
-				}
-				break;
-			case 6:
-				if (rightDistance < 15) {
-					step_counter[0] = 2 * SPC_side;
-					go('L');
-					state = 7;
-				} else if (leftDistance < 8) {
-					step_counter[0] = 2 * SPC_side;
-					go('R');
-					state = 8;
-				}
-
-				if (backDistance > 58) {
-					step_counter[0] = 90 * SPD;
-					go('O');
-					state = 10;
-				}
-				break;
-			case 7:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('K');
-					state = 9;
-				}
-				break;
-			case 8:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('O');
-					state = 9;
-				}
-				break;
-			case 9:
-				if (step_counter[0] == 0) {
-					go('F');
-					state = 6;
-				}
-				break;
-			case 10:
-				if (step_counter[0] == 0) {
-					state = 11;
 				}
 				break;
 			default:

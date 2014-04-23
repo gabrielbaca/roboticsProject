@@ -216,13 +216,14 @@ int main(void)
 			case 0:
 				MotorsON = 0;
 				Robo_State = 0;
-				servo2_angle = 0;
+
 				Extinguish(RESET);
 				break;
 			case 1:
-				//PutCharacter('x');
 				ret = Extinguish(GO);
 				if (ret == 1) {
+					Robo_State = 0;
+				} else if (ret == 2) {
 					Robo_State = 0;
 				}
 				break;
@@ -414,7 +415,7 @@ int main(void)
 */
 
 		servo1_angle = 0;
-		//servo2_angle = -90;
+		servo2_angle = -90;
 	/*
 		if (frontDistance > 13 && frontDistance < 17) {
 			servo2_angle = 90;
@@ -651,10 +652,8 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl2) ChangeNotice_Handler(void)
 
     // .. things to do .. 
     if ( !(temp & (1<<13)) ) { //button on RD13 is pressed
-		if (Robo_State == 0) {
+		if (Robo_State == 0)
 			Robo_State = 1;
-			servo2_angle = -90;
-		}
 		else {
 			Robo_State = 0;
 		}
@@ -1986,33 +1985,112 @@ unsigned char GoToRoom1(char reset) {
 
 unsigned char Extinguish(char reset) {
 	static int state = 0;
+	static int degrees = 30;
 	if (reset) {
 		state = 0;
+		degrees = 30;
 	} else {
 		switch (state) {
 			case 0:
-				if (xtime == 0 && frontDistance > 11 && frontDistance < 15 && COMMAND == '3') {
-					// ready to extinguish
-					servo2_angle = 90;
-					xtime = 15000;
-					state = 1;
-				}
-				
+				goSlow();
+				xtime = 50000; 	// 5 seconds
+				go('F');
+				MotorsON = 0;	//stop
+				state = 1;
 				break;
 			case 1:
+				switch (COMMAND) {		//zone 3 is the center
+					case '1':
+						step_counter[0] = degrees--*2 * SPD;
+						go('K');
+						MotorsON = 1;
+						break;
+					case '2':
+						step_counter[0] = degrees-- * SPD;
+						go('K');
+						MotorsON = 1;
+						break;
+					case '4':
+						step_counter[0] = degrees-- * SPD;
+						go('O');
+						MotorsON = 1;
+						break;
+					case '5':
+						step_counter[0] = degrees--*2 * SPD;
+						go('O');
+						MotorsON = 1;
+						break;
+
+					case '3':		// flame is found in the center
+						go('F'):
+						MotorsON = 1;
+						state = 3;
+						break;
+				}
+				if (COMMAND != '0' && COMMAND != '3') {		// COMMAND is not 0 or 3
+					state = 2;
+				}
+
+				if (xtime == 0) {	//flame not found in 'xtime'
+					MotorsON = 0;
+					state = 0;
+					goFast();
+					return 2;		// RETURN FLAME NOT FOUND IN ROOM
+				}
+
+				break;
+			case 2:
+				if (step_counter[0] == 0) {
+					xtime = 50000; 	// 5 seconds
+					MotorsON = 0;
+					state = 1;
+				}
+				break;
+			case 3:
+				if (frontDistance > 13 && frontDistance < 17) {
+					// ready to extinguish
+					MotorsON = 0;
+					servo2_angle = 90;
+					xtime = 10000;
+					state = 4;
+				} else if (frontDistance <= 13) {
+					go('B');
+				} else if (frontDistance >= 17) {
+					go('F');
+				}
+
+				if (leftDistance < 8) {
+					step_counter[0] = 2 * SPC_side;
+					go('R');
+					state = 5;
+				}
+				if (rightDistance < 8) {
+					step_counter[0] = 2 * SPC_side;
+					go('L');
+					state = 5;
+				}
+
+				break;
+			case 4:
 				if (xtime == 0) {
 					servo2_angle = -90;
 					if (COMMAND == '0') { // flame was extinguished
-						state = 2;
+						state = 6;
 					} else {			// try again
-						state = 0;
-						xtime = 30000;
+						state = 3;
 					}
+				}
+				break;
+			case 5:
+				if (step_counter[0]) {
+					go('F');
+					state = 3;
 				}
 				break;
 			default:
 				MotorsON = 0;
 				state = 0;
+				goFast();
 				return 1;
 				break;
 		}

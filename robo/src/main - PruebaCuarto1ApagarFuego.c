@@ -84,8 +84,6 @@ unsigned char GoToRoom4short(char reset);
 unsigned char GoToRoom4long(char reset);
 unsigned char BackToStart(char reset);
 unsigned char GoToRoom1(char reset);
-
-unsigned char Extinguish(char reset);
 /***************************************/
 
 
@@ -116,8 +114,6 @@ int servo1_angle = 0;
 unsigned int servo2_counter = 0, servo2_period = 200;
 int servo2_angle = 0;
 
-// general time counters
-int xtime = 0;
 int auxcounter = 10000; //for the servo, just for testing
 /******************************************/
 
@@ -216,12 +212,25 @@ int main(void)
 			case 0:
 				MotorsON = 0;
 				Robo_State = 0;
-				servo2_angle = 0;
-				Extinguish(RESET);
+
+				InitialOrientation(RESET);
+				GoToCenter(RESET);
+				GoToRoom1(RESET);
 				break;
 			case 1:
-				//PutCharacter('x');
-				ret = Extinguish(GO);
+				ret = InitialOrientation(GO);
+				if (ret == 1) {
+					Robo_State = 2;
+				}
+				break;
+			case 2:
+				ret = GoToCenter(GO);
+				if (ret == 1) {
+					Robo_State = 3;
+				}
+				break;
+			case 3:
+				ret = GoToRoom1(GO);
 				if (ret == 1) {
 					Robo_State = 0;
 				}
@@ -414,7 +423,7 @@ int main(void)
 */
 
 		servo1_angle = 0;
-		//servo2_angle = -90;
+		servo2_angle = -90;
 	/*
 		if (frontDistance > 13 && frontDistance < 17) {
 			servo2_angle = 90;
@@ -486,9 +495,6 @@ void __ISR(_TIMER_1_VECTOR, ipl2) Timer1Handler(void)
 
 	if (auxcounter != 0)
 		auxcounter--;
-
-	if (xtime != 0)
-		xtime--;
 }
 
 /* TIMER 2 Interrupt Handler - configured to 50us periods */
@@ -651,10 +657,8 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl2) ChangeNotice_Handler(void)
 
     // .. things to do .. 
     if ( !(temp & (1<<13)) ) { //button on RD13 is pressed
-		if (Robo_State == 0) {
+		if (Robo_State == 0)
 			Robo_State = 1;
-			servo2_angle = -90;
-		}
 		else {
 			Robo_State = 0;
 		}
@@ -1972,42 +1976,6 @@ unsigned char GoToRoom1(char reset) {
 			case 10:
 				if (step_counter[0] == 0) {
 					state = 11;
-				}
-				break;
-			default:
-				MotorsON = 0;
-				state = 0;
-				return 1;
-				break;
-		}
-	}
-	return 0;
-}
-
-unsigned char Extinguish(char reset) {
-	static int state = 0;
-	if (reset) {
-		state = 0;
-	} else {
-		switch (state) {
-			case 0:
-				if (xtime == 0 && frontDistance > 11 && frontDistance < 15 && COMMAND == '3') {
-					// ready to extinguish
-					servo2_angle = 90;
-					xtime = 15000;
-					state = 1;
-				}
-				
-				break;
-			case 1:
-				if (xtime == 0) {
-					servo2_angle = -90;
-					if (COMMAND == '0') { // flame was extinguished
-						state = 2;
-					} else {			// try again
-						state = 0;
-						xtime = 30000;
-					}
 				}
 				break;
 			default:

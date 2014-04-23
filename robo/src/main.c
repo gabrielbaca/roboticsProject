@@ -653,7 +653,7 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl2) ChangeNotice_Handler(void)
     if ( !(temp & (1<<13)) ) { //button on RD13 is pressed
 		if (Robo_State == 0) {
 			Robo_State = 1;
-			servo2_angle = -90;
+			servo2_angle = -90;		// ONLY FOR THE EXTINGUISH TEST
 		}
 		else {
 			Robo_State = 0;
@@ -1991,7 +1991,7 @@ unsigned char Extinguish(char reset) {
 	} else {
 		switch (state) {
 			case 0:
-				if (xtime == 0 && frontDistance > 11 && frontDistance < 15 && COMMAND == '3') {
+				if (frontDistance > 11 && frontDistance < 15 && COMMAND == '3') {
 					// ready to extinguish
 					servo2_angle = 90;
 					xtime = 15000;
@@ -2002,11 +2002,16 @@ unsigned char Extinguish(char reset) {
 			case 1:
 				if (xtime == 0) {
 					servo2_angle = -90;
+					xtime = 30000;
+					state = 2;
+				}
+				break;
+			case 2:
+				if (xtime == 0) {
 					if (COMMAND == '0') { // flame was extinguished
-						state = 2;
+						state = 3;
 					} else {			// try again
 						state = 0;
-						xtime = 30000;
 					}
 				}
 				break;

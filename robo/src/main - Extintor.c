@@ -77,17 +77,13 @@ unsigned char InitialOrientation(char reset);
 unsigned char InvInitialOrientation(char reset);
 unsigned char GoToCenter(char reset);
 unsigned char GoToRoom2(char reset);
-unsigned char GoToRoom3FromRoom2(char reset);
-unsigned char GoToStartFromRoom3(char reset);
-unsigned char GoToCenterFromRoom3(char reset);
+unsigned char GoToRoom3(char reset);
+unsigned char Return(char reset);
 unsigned char TestDog(char reset);
 unsigned char GoToRoom4short(char reset);
 unsigned char GoToRoom4long(char reset);
 unsigned char BackToStart(char reset);
 unsigned char GoToRoom1(char reset);
-unsigned char GoToCenterFromRoom1(char reset);
-unsigned char GoToStartFromCenter(char reset);
-
 unsigned char ReachFlame(char reset);
 unsigned char Extinguish(char reset);
 /***************************************/
@@ -212,8 +208,6 @@ int main(void)
 
 	counterDistanceMeasure=600; //measure ULTRASONICS distance each 60 ms
 
-	unsigned char dogFound = 0;
-
 	while (1) {
 	
 /***************** Robot MAIN state machine *****************/
@@ -223,158 +217,16 @@ int main(void)
 				MotorsON = 0;
 				Robo_State = 0;
 				servo2_angle = 0;	//debugging
-
-				InvInitialOrientation(RESET);
-				TestDog(RESET);
-				GoToRoom4short(RESET);
-				GoToStartFromRoom4(RESET);
-				BackToStart(RESET);
-				InitialOrientation(RESET);
-				GoToCenter(RESET);
-				GoToRoom2(RESET);
-				GoToRoom3FromRoom2(RESET);
-				GoToCenterFromRoom3(RESET);
-				GoToRoom1(RESET);
-				GoToCenterFromRoom1(RESET);
-				GoToStartFromCenter(RESET);
-
 				ReachFlame(RESET);
 				Extinguish(RESET);
 				break;
 			case 1:
-				ret = InvInitialOrientation(GO);
+				ret = ReachFlame(GO);
 				if (ret == 1) {
 					Robo_State = 2;
 				}
 				break;
 			case 2:
-				ret = TestDog(GO);
-				if (ret == 1) {			//dog not detected
-					dogFound = 0;
-					Robo_State = 3;
-				} else if (ret == 2) {	//dog detected
-					dogFound = 1;
-					Robo_State = 6;
-				}
-				break;
-			case 3:
-				ret = GoToRoom4short(GO);
-				if (ret == 1) {
-					Robo_State = 4;
-				}
-				break;
-			case 4:
-				ret = ReachFlame(GO);
-				if (ret == 1) {			//flame found approach finished -> extinguish
-					Robo_State = 100;		//EXTINGUISH STATE is 100
-				} else if (ret == 2) {	//flame not found
-					Robo_State = 5;
-				}
-				break;
-			case 5:
-				ret = GoToStartFromRoom4(GO);
-				if (ret == 1) {
-					Robo_State = 7;
-				}
-				break;
-			case 6:
-				ret = BackToStart(GO);
-				if (ret == 1) {
-					Robo_State = 7;
-				}
-				break;
-			case 7:
-				ret = InitialOrientation(GO);
-				if (ret == 1) {
-					Robo_State = 8;
-				}
-				break;
-			case 8:
-				ret = GoToCenter(GO);
-				if (ret == 1) {
-					Robo_State = 9;
-				}
-				break;
-			case 9:
-				ret = GoToRoom2(GO);
-				if (ret == 1) {
-					Robo_State = 10;
-				}
-				break;
-			case 10:
-				ret = ReachFlame(GO);
-				if (ret == 1) {			//flame found approach finished -> extinguish
-					Robo_State = 100;		//EXTINGUISH STATE is 100
-				} else if (ret == 2) {	//flame not found
-					Robo_State = 11;
-				}
-				break;
-			case 11:
-				ret = GoToRoom3FromRoom2(GO);
-				if (ret == 1) {
-					Robo_State = 12;
-				}
-				break;
-			case 12:
-				ret = ReachFlame(GO);
-				if (ret == 1) {			//flame found approach finished -> extinguish
-					Robo_State = 100;		//EXTINGUISH STATE is 100
-				} else if (ret == 2) {	//flame not found
-					Robo_State = 13;
-				}
-				break;
-			case 13:
-				ret = GoToCenterFromRoom3(GO);
-				if (ret == 1) {
-					Robo_State = 14;
-				}
-				break;
-			case 14:
-				ret = GoToRoom1(GO);
-				if (ret == 1) {
-					Robo_State = 15;
-				}
-				break;
-			case 15:
-				ret = ReachFlame(GO);
-				if (ret == 1) {			//flame found approach finished -> extinguish
-					Robo_State = 100;		//EXTINGUISH STATE is 100
-				} else if (ret == 2) {	//flame not found
-					Robo_State = 16;
-				}
-				break;
-			case 16:
-				ret = GoToCenterFromRoom1(GO);
-				if (ret == 1) {
-					if (dogFound) {
-						Robo_State = 17;
-					} else {	//already explored room 4
-						Robo_State = 18;
-					}
-				}
-				break;
-			case 17:
-				ret = GoToRoom4long(GO);
-				if (ret == 1) {
-					Robo_State = 19;
-				}
-				break;
-			case 18:
-				ret = GoToStartFromCenter(GO);
-				if (ret == 1) {
-					Robo_State = 0;
-				}
-				break;
-			case 19:
-				ret = ReachFlame(GO);
-				if (ret == 1) {			//flame found approach finished -> extinguish
-					Robo_State = 100;		//EXTINGUISH STATE is 100
-				} else if (ret == 2) {	//flame not found
-					Robo_State = 0;			// OR go to new state and return to start
-				}
-				break;
-
-			case 100:
 				ret = Extinguish(GO);
 				if (ret == 1) {
 					Robo_State = 0;
@@ -1070,7 +922,7 @@ unsigned char GoToCenter(char reset) {
 	return 0;
 }
 
-unsigned char GoToRoom2(char reset) {	//FALTA orientar el carrito al final
+unsigned char GoToRoom2(char reset) {
 	static int state = 0;
 	if (reset) 
 		state = 0;
@@ -1157,7 +1009,7 @@ unsigned char GoToRoom2(char reset) {	//FALTA orientar el carrito al final
 	return 0;
 }
 
-unsigned char GoToRoom3FromRoom2(char reset) {	//FALTA considerar la orientacion final en el 2
+unsigned char GoToRoom3(char reset) {
 	static int state = 0;
 	if (reset) state = 0;
 	else {
@@ -1383,7 +1235,7 @@ unsigned char GoToRoom3FromRoom2(char reset) {	//FALTA considerar la orientacion
 	return 0;
 }
 
-unsigned char GoToStartFromRoom3(char reset) {
+unsigned char Return(char reset) {
 	static int state = 0;
 	if (reset) state = 0;
 	else {
@@ -1532,121 +1384,6 @@ unsigned char GoToStartFromRoom3(char reset) {
 				if (step_counter[0] == 0) {
 					go('F');
 					state = 14;
-				}
-				break;
-			default:
-				MotorsON = 0;
-				state = 0;
-				return 1;
-				break;
-		}
-	}
-	return 0;
-}
-
-unsigned char GoToCenterFromRoom3(char reset) {
-	static int state = 0;
-	if (reset) state = 0;
-	else {
-		switch (state) {
-			case 0:
-				go('B');
-				MotorsON = 1;
-				state = 1;
-				break;
-			case 1:
-				if (leftDistance < 8) {
-					step_counter[0] = 1 * SPC_side;
-					go('R');
-					state = 2;
-				}/*
-				else if (leftDistance > 9 && leftDistance < 10) {
-					step_counter[0] = 1 * SPC_side;
-					go('L');
-					state = 3;
-				}*/
-				else if (leftDistance >= 10) {
-					step_counter[0] = 2 * SPC_side;
-					go('L');
-					state = 4;
-				}
-
-				if (backDistance < 10) {
-					state = 5;
-				}
-				break;
-			case 2:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('K');
-					state = 4;
-				}
-				break;
-			case 3:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('O');
-					state = 4;
-				}
-				break;
-			case 4:
-				if (step_counter[0] == 0) {
-					go('B');
-					state = 1;
-				}
-				break;
-			case 5:
-				go('R');
-				state = 6;
-				break;
-			case 6:
-				if (backDistance < 8) {
-					step_counter[0] = 1 * SPC_front;
-					go('F');
-					state = 7;
-				}/*
-				else if (backDistance > 9 && backDistance < 10) {
-					step_counter[0] = 1 * SPC_front;
-					go('B');
-					state = 8;
-				}*/
-				else if (backDistance > 10 && backDistance < 20) {
-					step_counter[0] = 1 * SPC_front;
-					go('B');
-					state = 9;
-				}
-
-				if (backDistance >= 20) { 
-					step_counter[0] = 27 * SPC_side;
-					go('R');
-					state = 10;
-				}
-				break;
-			case 7:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('K');
-					state = 9;
-				}
-				break;
-			case 8:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('O');
-					state = 9;
-				}
-				break;
-			case 9:
-				if (step_counter[0] == 0) {
-					go('R');
-					state = 6;
-				}
-				break;
-			case 10:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 180 * SPD;
-					go('O');
-					state = 11;
 				}
 				break;
 			default:
@@ -1842,7 +1579,7 @@ unsigned char GoToRoom4short(char reset) {
 				}
 				break;
 			case 8:
-				if (frontDistance < 40) {
+				if (frontDistance < 10) {
 					state = 10;
 				}
 
@@ -2022,7 +1759,7 @@ unsigned char GoToRoom4long(char reset) {
 				}
 				break;
 			case 17:
-				if (frontDistance < 40) {
+				if (frontDistance < 10) {
 					state = 19;
 				}
 
@@ -2212,311 +1949,39 @@ unsigned char GoToRoom1(char reset) {
 				}
 
 				if (backDistance > 58) {
-					step_counter[0] = 45 * SPD;	//ROTATE how much?
-					go('O');
-					state = 10;
-				}
-				break;
-			case 7:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('K');
-					state = 9;
-				}
-				break;
-			case 8:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('O');
-					state = 9;
-				}
-				break;
-			case 9:
-				if (step_counter[0] == 0) {
-					go('F');
-					state = 6;
-				}
-				break;
-			case 10:
-				if (step_counter[0] == 0) {
-					state = 11;
-				}
-				break;
-			default:
-				MotorsON = 0;
-				state = 0;
-				return 1;
-				break;
-		}
-	}
-	return 0;
-}
-
-unsigned char GoToCenterFromRoom1(char reset) {
-	static int state = 0;
-	if (reset) {
-		state = 0;
-	} else {
-		switch (state) {
-			case 0:
-				step_counter[0] = 45 * SPD;
-				go('K');
-				MotorsON = 1;
-				state = -1;
-				break;
-			case -1:
-				if (step_counter[0] == 0) {
-					MotorsON = 0;
-					state = -2;
-				}
-				break;
-			case -2:
-				go('B');
-				MotorsON = 1;
-				state = 1;
-				break;
-			case 1:
-				if (leftDistance < 8) {
-					step_counter[0] = 2 * SPC_side;
-					go('R');
-					state = 2;
-				}
-				if (rightDistance < 8) {
-					step_counter[0] = 2 * SPC_side;
-					go('L');
-					state = 3;
-				}
-
-				if (backDistance < 11) {
 					step_counter[0] = 90 * SPD;
 					go('O');
-					state = 5;
-				}
-				break;
-			case 2:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('K');
-					state = 4;
-				}
-				break;
-			case 3:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('O');
-					state = 4;
-				}
-				break;
-			case 4:
-				if (step_counter[0] == 0) {
-					go('B');
-					state = 1;
-				}
-				break;
-			case 5:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 10 * SPC_front;
-					go('B');
-					state = 6;
-				}
-				break;
-			case 6:
-				if (step_counter[0] == 0) {
-					state = 7;
+					state = 10;
 				}
 				break;
 			case 7:
-				if (rightDistance < 8) {
-					step_counter[0] = 1 * SPC_side;
-					go('L');
-					state = 8;
-				}/*
-				else if (leftDistance > 7 && leftDistance < 9) {
-					step_counter[0] = 1 * SPC_side;
-					go('L');
+				if (step_counter[0] == 0) {
+					step_counter[0] = 2 * SPD;
+					go('K');
 					state = 9;
-				}*/
-				else if (rightDistance >= 10 && rightDistance < 30) {
-					step_counter[0] = 1 * SPC_side;
-					go('R');
-					state = 9;
-				}
-				if (rightDistance >= 30) {
-					state = 11;
 				}
 				break;
 			case 8:
 				if (step_counter[0] == 0) {
 					step_counter[0] = 2 * SPD;
 					go('O');
-					state = 10;
+					state = 9;
 				}
 				break;
 			case 9:
 				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('K');
-					state = 10;
+					go('F');
+					state = 6;
 				}
 				break;
 			case 10:
 				if (step_counter[0] == 0) {
-					go('B');
-					state = 7;
+					state = 11;
 				}
 				break;
 			default:
 				MotorsON = 0;
 				state = 0;
-				return 1;
-				break;
-		}
-	}
-	return 0;
-}
-
-unsigned char GoToStartFromCenter(char reset) {
-	static int state = 0;
-	if (reset) {
-		state = 0;
-	} else {
-		switch (state) {
-			case 0:
-				if (step_counter[0] == 0) {
-					state = 1;
-				}
-				break;
-			case 1:
-				go('B');
-				state = 2;
-				break;
-			case 2:
-				if (leftDistance < 20 || rightDistance < 20) { //until it finds the wall----------------
-					state = 3;
-				}
-				break;
-			case 3:
-				go('B');
-				state = 4;
-				break;
-			case 4:
-				if (leftDistance < 8) {
-					step_counter[0] = 1 * SPC_side;
-					go('R');
-					state = 5;
-				}else if (rightDistance < 8) {
-					step_counter[0] = 1 * SPC_side;
-					go('L');
-					state = 6;
-				}
-
-				if (backDistance < 10) {
-					state = 8;
-				}
-				break;
-			case 5:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('K');
-					state = 7;
-				}
-				break;
-			case 6:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('O');
-					state = 7;
-				}
-				break;
-			case 7:
-				if (step_counter[0] == 0) {
-					go('B');
-					state = 4;
-				}
-				break;
-			default:
-				MotorsON = 0;
-				state = 0;
-				return 1;
-				break;
-		}
-	}
-	return 0;
-}
-
-unsigned char ReachFlame(char reset) {
-	static int state = 0;
-	if (reset) {
-		state = 0;
-	} else {
-		switch (state) {
-			case 0:
-				xtime = 30000;
-				state = 1;
-				break;
-			case 1:
-				if (xtime == 0) {
-					if (COMMAND == '0') {	//flama no encontrada
-						MotorsON = 0;
-						state = 0;
-						goFast();
-						return 2;	// TERMINA
-					} else {				//iniciar approach
-						state = 2;
-						go('F');
-						MotorsON = 1;
-						goSlow();
-					}
-				}
-				break;
-			case 2:
-				if (xtime == 0) {
-					MotorsON = 1;
-					if (rightDistance < 8) {
-						step_counter[0] = 2 * SPC_side;
-						go('L');
-						state = 3;
-					} else if (leftDistance < 8) {
-						step_counter[0] = 2 * SPC_side;
-						go('R');
-						state = 3;
-					}
-
-					if (COMMAND == '1') {
-						step_counter[0] = 10 * SPD;
-						go('K');
-						state = 3;
-					} else if (COMMAND == '2') {
-						step_counter[0] = 5 * SPD;
-						go('K');
-						state = 3;
-					} else if (COMMAND == '4') {
-						step_counter[0] = 5 * SPD;
-						go('O');
-						state = 3;
-					} else if (COMMAND == '5') {
-						step_counter[0] = 10 * SPD;
-						go('O');
-						state = 3;
-					}
-
-					if (frontDistance < 15) {	//flame found
-						state = 4;
-					}
-				}
-				break;
-			case 3:
-				if (step_counter[0] == 0) {
-					go('F');
-					xtime = 20000;
-					MotorsON = 0;
-					state = 2;
-				}
-				break;
-			default:
-				MotorsON = 0;
-				state = 0;
-				goFast();
 				return 1;
 				break;
 		}
@@ -2592,6 +2057,83 @@ unsigned char Extinguish(char reset) {
 			default:
 				MotorsON = 0;
 				state = 0;
+				return 1;
+				break;
+		}
+	}
+	return 0;
+}
+
+unsigned char ReachFlame(char reset) {
+	static int state = 0;
+	if (reset) {
+		state = 0;
+	} else {
+		switch (state) {
+			case 0:
+				xtime = 30000;
+				state = 1;
+				break;
+			case 1:
+				if (xtime == 0) {
+					if (COMMAND == '0') {	//flama no encontrada
+						state = 99;
+					} else {				//iniciar approach
+						state = 2;
+						go('F');
+						MotorsON = 1;
+						goSlow();
+					}
+				}
+				break;
+			case 2:
+				if (xtime == 0) {
+					MotorsON = 1;
+					if (rightDistance < 8) {
+						step_counter[0] = 2 * SPC_side;
+						go('L');
+						state = 3;
+					} else if (leftDistance < 8) {
+						step_counter[0] = 2 * SPC_side;
+						go('R');
+						state = 3;
+					}
+
+					if (COMMAND == '1') {
+						step_counter[0] = 10 * SPD;
+						go('K');
+						state = 3;
+					} else if (COMMAND == '2') {
+						step_counter[0] = 5 * SPD;
+						go('K');
+						state = 3;
+					} else if (COMMAND == '4') {
+						step_counter[0] = 5 * SPD;
+						go('O');
+						state = 3;
+					} else if (COMMAND == '5') {
+						step_counter[0] = 10 * SPD;
+						go('O');
+						state = 3;
+					}
+
+					if (frontDistance < 15) {	//flame found
+						state = 4;
+					}
+				}
+				break;
+			case 3:
+				if (step_counter[0] == 0) {
+					go('F');
+					xtime = 20000;
+					MotorsON = 0;
+					state = 2;
+				}
+				break;
+			default:
+				MotorsON = 0;
+				state = 0;
+				goFast();
 				return 1;
 				break;
 		}

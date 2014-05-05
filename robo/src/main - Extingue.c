@@ -616,6 +616,7 @@ void __ISR(_INPUT_CAPTURE_4_VECTOR, ipl4) IC4Handler(void)
 
 void __ISR(_UART2_VECTOR, ipl2) IntUart2Handler(void)
 {
+	char temp;
 	// Is this an RX interrupt?
 	if(INTGetFlag(INT_SOURCE_UART_RX(UART2)))
 	{
@@ -624,10 +625,14 @@ void __ISR(_UART2_VECTOR, ipl2) IntUart2Handler(void)
 	    INTClearFlag(INT_SOURCE_UART_RX(UART2));
 
 		// Code to be executed on RX interrupt:
-		COMMAND = UARTGetDataByte(UART2);
+		temp = UARTGetDataByte(UART2);
+
+		if (temp >= '0' && temp <= '5') {	//ignore unknown chars
+			COMMAND = temp;
+		}
 		
 		// Echo what we just received.
-		PutCharacter(COMMAND);
+		PutCharacter(temp);
 	}
 
 	// We don't care about TX interrupt
@@ -1989,81 +1994,6 @@ unsigned char GoToRoom1(char reset) {
 	return 0;
 }
 
-unsigned char Extinguish(char reset) {
-	static int state = 0;
-	static int tries = 0; //Numero de intentos de apagar la flama, para cambiar la estrategia
-	if (reset) {
-		state = 0;
-	} else {
-		switch (state) {
-			case 0:
-				if (frontDistance > 11 && frontDistance < 15 && COMMAND == '3') {
-					// ready to extinguish
-					servo2_angle = 90;
-					xtime = 15000;
-					
-					if(tries <= 3) {
-						state = 1;
-					} else { //retrocede por si la vela quedó muy cerca
-						step_counter[0] = 2 * SPC_front;
-						go('B');
-						MotorsON = 1;
-						tries = 0;
-						state = 3;
-					}
-					
-				}
-				if (COMMAND == '1' || COMMAND == '2') {
-					step_counter[0] = 2 * SPD;
-					go('K');
-					MotorsON = 1;
-					state = 3;
-				} else if (COMMAND == '4' || COMMAND == '5') {
-					step_counter[0] = 2 * SPD;
-					go('O');
-					MotorsON = 1;
-					state = 3;
-				}
-				if (frontDistance <= 11) {
-					step_counter[0] = 2 * SPC_front;
-					go('B');
-					MotorsON = 1;
-					state = 3;
-				}
-				break;
-			case 1:
-				if (xtime == 0) {
-					servo2_angle = -90;
-					xtime = 30000;
-					state = 2;
-				}
-				break;
-			case 2:
-				if (xtime == 0) {
-					if (COMMAND == '0') { // flame was extinguished
-						state = 99;
-					} else {	
-						tries++;		// try again
-						state = 0;
-					}
-				}
-				break;
-			case 3:
-				if (step_counter[0] == 0) {
-					MotorsON = 0;
-					state = 0;
-				}
-				break;
-			default:
-				MotorsON = 0;
-				state = 0;
-				return 1;
-				break;
-		}
-	}
-	return 0;
-}
-
 unsigned char ReachFlame(char reset) {
 	static int state = 0;
 	if (reset) {
@@ -2077,7 +2007,10 @@ unsigned char ReachFlame(char reset) {
 			case 1:
 				if (xtime == 0) {
 					if (COMMAND == '0') {	//flama no encontrada
-						state = 99;
+						MotorsON = 0;
+						state = 0;
+						goFast();
+						return 2;	// TERMINA
 					} else {				//iniciar approach
 						state = 2;
 						go('F');
@@ -2134,6 +2067,83 @@ unsigned char ReachFlame(char reset) {
 				MotorsON = 0;
 				state = 0;
 				goFast();
+				return 1;
+				break;
+		}
+	}
+	return 0;
+}
+
+unsigned char Extinguish(char reset) {
+	static int state = 0;
+	static int tries = 0; //Numero de intentos de apagar la flama, para cambiar la estrategia
+	static int flameDistanceLimit = 15;
+	if (reset) {
+		state = 0;
+		tries = 0;
+		flameDistanceLimit = 15;
+	} else {
+		switch (state) {
+			case 0:
+				if (frontDistance > 11 && frontDistance < flameDistanceLimit && COMMAND == '3') {
+					// ready to extinguish
+					servo2_angle = 90;
+					xtime = 15000;
+					state = 1;
+				}
+				if (COMMAND == '1' || COMMAND == '2') {
+					go('K');
+					MotorsON = 1;
+					state = 3;
+					step_counter[0] = 1 * SPD;
+				} else if (COMMAND == '4' || COMMAND == '5') {
+					go('O');
+					MotorsON = 1;
+					state = 3;
+					step_counter[0] = 1 * SPD;
+				}
+				if (frontDistance <= 11) {
+					step_counter[0] = 2 * SPC_front;
+					go('B');
+					MotorsON = 1;
+					state = 3;
+				}
+				break;
+			case 1:
+				if (xtime == 0) {
+					servo2_angle = -90;
+					xtime = 30000;
+					state = 2;
+				}
+				break;
+			case 2:
+				if (xtime == 0) {
+					if (COMMAND == '0') { // flame was extinguished
+						state = 99;
+					} else {
+						if(tries < 3) {	// try again
+							state = 0;
+							tries++;
+						} else { 		//retrocede por si la vela quedó muy cerca
+							go('B');
+							MotorsON = 1;
+							tries = 0;
+							flameDistanceLimit += 2;
+							state = 3;
+							step_counter[0] = 2 * SPC_front;
+						}
+					}
+				}
+				break;
+			case 3:
+				if (step_counter[0] == 0) {
+					MotorsON = 0;
+					state = 0;
+				}
+				break;
+			default:
+				MotorsON = 0;
+				state = 0;
 				return 1;
 				break;
 		}

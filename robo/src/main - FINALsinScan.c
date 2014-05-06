@@ -69,7 +69,6 @@ void step (unsigned char data, unsigned char motorNumber);
 void go (char code);
 void goSlow();
 void goFast();
-int abs(int number) { return (number < 0) ? -number : number; }
 
 //main algorithm routines
 #define RESET 1
@@ -95,12 +94,10 @@ unsigned char GoToStartFromRoom4shortAfterExt(char reset);
 unsigned char GoToStartFromRoom4long(char reset);
 unsigned char GoToStartFromRoom4longAfterExt(char reset);
 unsigned char GoToCenterFromRoom2(char reset);
-unsigned char GoToCenterFromRoom2point1(char reset);	//NOT USED anymore
+unsigned char GoToCenterFromRoom2point1(char reset);
 
 unsigned char ExploreRightRoom1(char reset);
 unsigned char ExploreCenterRoom1(char reset);
-
-int ScanRoom(char reset);
 
 unsigned char ReachFlame(char reset);
 unsigned char Extinguish(char reset);
@@ -110,11 +107,10 @@ unsigned char Extinguish(char reset);
 /*************GLOBALS**********************/
 char COMMAND = '0';
 int commandtime = 0;
-//unsigned char lastPositionR1;	no longer needed, when using scan
-int degreesTurned = 0;
+unsigned char lastPositionR1;
 
 // for motors
-int Robo_State = 0, debug_state = 0;
+unsigned char Robo_State = 0, debug_state = 0;
 unsigned char MotorsON = 0;
 unsigned char M1forward = 1, M2forward = 1, M3forward = 1, M4forward = 1;
 unsigned int M1_counter = 0, M2_counter = 0, M3_counter = 0, M4_counter = 0;
@@ -231,7 +227,6 @@ int main(void)
 
 	unsigned char dogFound = 0;
 	int lastRoom = 0;
-	
 
 	while (1) {
 	
@@ -269,8 +264,6 @@ int main(void)
 				ExploreRightRoom1(RESET);
 				ExploreCenterRoom1(RESET);
 
-				ScanRoom(RESET);
-
 				ReachFlame(RESET);
 				Extinguish(RESET);
 				break;
@@ -293,14 +286,6 @@ int main(void)
 			case 3:
 				ret = GoToRoom4short(GO);
 				if (ret == 1) {
-					Robo_State = 35;
-				}
-				break;
-			case 35:
-				degreesTurned = ScanRoom(GO);
-				if (degreesTurned == 200) {	// room scaned: no flame found
-					Robo_State = 4;	// just to confirm
-				} else if (degreesTurned != 300) {	//room scanned: flame found at 'degreesTurned'
 					Robo_State = 4;
 				}
 				break;
@@ -340,14 +325,6 @@ int main(void)
 			case 9:
 				ret = GoToRoom2(GO);
 				if (ret == 1) {
-					Robo_State = 95;
-				}
-				break;
-			case 95:
-				degreesTurned = ScanRoom(GO);
-				if (degreesTurned == 200) {	// room scaned: no flame found
-					Robo_State = 10;	// just to confirm
-				} else if (degreesTurned != 300) {	//room scanned: flame found at 'degreesTurned'
 					Robo_State = 10;
 				}
 				break;
@@ -357,10 +334,10 @@ int main(void)
 					Robo_State = 100;		//EXTINGUISH STATE is 100
 					lastRoom = 2;
 				} else if (ret == 2) {	//flame not found
-					Robo_State = 11;
+					Robo_State = 51;
 				}
 				break;
-			/*case 51:	NO LONGER NECESSARY WITH SCAN
+			case 51:
 				ret = InspectRoom2RightSide(GO);
 				if (ret == 1) {
 					Robo_State = 52;
@@ -374,18 +351,10 @@ int main(void)
 				} else if (ret == 2) {	//flame not found
 					Robo_State = 11;
 				}
-				break;*/
+				break;
 			case 11:
 				ret = GoToRoom3FromRoom2(GO);
 				if (ret == 1) {
-					Robo_State = 115;
-				}
-				break;
-			case 115:
-				degreesTurned = ScanRoom(GO);
-				if (degreesTurned == 200) {	// room scaned: no flame found
-					Robo_State = 12;	// just to confirm
-				} else if (degreesTurned != 300) {	//room scanned: flame found at 'degreesTurned'
 					Robo_State = 12;
 				}
 				break;
@@ -407,16 +376,8 @@ int main(void)
 			case 14:
 				ret = GoToRoom1(GO);
 				if (ret == 1) {
-					Robo_State = 145;
-					//lastPositionR1 = 1;		// first position NO LONGER NECESSARY TO TRACE
-				}
-				break;
-			case 145:
-				degreesTurned = ScanRoom(GO);
-				if (degreesTurned == 200) {	// room scaned: no flame found
-					Robo_State = 15;	// just to confirm
-				} else if (degreesTurned != 300) {	//room scanned: flame found at 'degreesTurned'
 					Robo_State = 15;
+					lastPositionR1 = 1;		// first position
 				}
 				break;
 			case 15:
@@ -425,11 +386,11 @@ int main(void)
 					Robo_State = 100;		//EXTINGUISH STATE is 100
 					lastRoom = 1;
 				} else if (ret == 2) {	//flame not found
-					Robo_State = 16;
+					Robo_State = 30;
 				}
 				break;
 
-		/*		// OTHER EXPLORATION CASES FOR ROOM 1
+				// OTHER EXPLORATION CASES FOR ROOM 1
 			case 30:
 				ret = ExploreRightRoom1(GO);
 				if (ret == 1) {
@@ -462,10 +423,9 @@ int main(void)
 					Robo_State = 16;
 				}
 				break;
-		*/		////////////////////////////////////////
+				////////////////////////////////////////
 				
 			case 16:
-				degreesTurned = 0;	// this is done so that we can reuse the GoToCenterFromRoom1 function
 				ret = GoToCenterFromRoom1(GO);
 				if (ret == 1) {
 					if (dogFound) {
@@ -478,25 +438,15 @@ int main(void)
 			case 17:
 				ret = GoToRoom4long(GO);
 				if (ret == 1) {
-					Robo_State = 175;
-				}
-				break;
-			case 175:
-				degreesTurned = ScanRoom(GO);
-				if (degreesTurned == 200) {	// room scaned: no flame found
-					Robo_State = 19;	// just to confirm
-				} else if (degreesTurned != 300) {	//room scanned: flame found at 'degreesTurned'
 					Robo_State = 19;
 				}
 				break;
-
 			case 18:
 				ret = GoToStartFromCenter(GO);
 				if (ret == 1) {
 					Robo_State = 0;
 				}
 				break;
-
 			case 19:
 				ret = ReachFlame(GO);
 				if (ret == 1) {			//flame found approach finished -> extinguish
@@ -520,7 +470,7 @@ int main(void)
 				}
 				break;
 			case 101:
-				switch (lastRoom) {		// THESE are the functions that use 'degreesTurned'
+				switch (lastRoom) {
 				case 1:
 					ret = GoToCenterFromRoom1(GO);
 					if (ret == 1) {
@@ -533,12 +483,12 @@ int main(void)
 						Robo_State = 102;
 					}
 					break;
-				/*case 21:
+				case 21:
 					ret = GoToCenterFromRoom2point1(GO);
 					if (ret == 1) {
 						Robo_State = 102;
 					}
-					break;*/
+					break;
 				case 3:
 					ret = GoToCenterFromRoom3afterExt(GO);
 					if (ret == 1) {
@@ -1327,7 +1277,7 @@ unsigned char GoToRoom2(char reset) {
 				}
 				break;
 			case 5:
-				step_counter[1] = 40 * SPC_front;
+				step_counter[1] = 47 * SPC_front;
 				countingDirection = 'F';
 				go ('F');
 				state = 6;
@@ -1416,9 +1366,16 @@ unsigned char GoToRoom3FromRoom2(char reset) {
 	else {
 		switch (state) {
 			case 0:
-				go('B');
+				go('K');
+				step_counter[0] = 85 * SPD;
 				MotorsON = 1;
-				state = 1;
+				state = -1;
+				break;
+			case -1:
+				if (step_counter[0] == 0) {
+					go('B');
+					state = 1;
+				}
 				break;
 			case 1:
 				if (leftDistance < 8) {
@@ -1623,7 +1580,7 @@ unsigned char GoToRoom3FromRoom2(char reset) {
 				break;
 			case 24:
 				if (step_counter[0] == 0) { //enter room 3
-					step_counter[1] = 25 * SPC_front;
+					step_counter[1] = 20 * SPC_front;
 					go('F');
 					state = 25;
 				}
@@ -1639,9 +1596,9 @@ unsigned char GoToRoom3FromRoom2(char reset) {
 					state = 27;
 				}
 
-				if (frontDistance < 23 || step_counter[1] == 0) {
-					//step_counter[0] = 30 * SPD;
-					//go('O');
+				if (frontDistance < 20 || step_counter[1] == 0) {
+					step_counter[0] = 30 * SPD;
+					go('O');
 					state = 29;
 				}
 				break;
@@ -1665,11 +1622,11 @@ unsigned char GoToRoom3FromRoom2(char reset) {
 					state = 25;
 				}
 				break;
-			/*case 29:
+			case 29:
 				if (step_counter[0] == 0) {
 					state = 30;
 				}
-				break;*/
+				break;
 			default:
 				MotorsON = 0;
 				state = 0;
@@ -1847,9 +1804,16 @@ unsigned char GoToCenterFromRoom3(char reset) {
 	else {
 		switch (state) {
 			case 0:
-				go('B');
+				step_counter[0] = 30 * SPD;
+				go('K');
 				MotorsON = 1;
-				state = 1;
+				state = -1;
+				break;
+			case -1:
+				if (step_counter[0] == 0) {
+					go('B');
+					state = 1;
+				}
 				break;
 			case 1:
 				if (leftDistance < 8) {
@@ -1862,7 +1826,7 @@ unsigned char GoToCenterFromRoom3(char reset) {
 					state = 3;
 				}
 
-				if (backDistance < 12) {
+				if (backDistance < 11) {
 					state = 5;
 				}
 				break;
@@ -1962,15 +1926,10 @@ unsigned char GoToCenterFromRoom3afterExt(char reset) {
 	else {
 		switch (state) {
 			case 0:
-				if (degreesTurned < 0) {
-					go('B');
-					state = 1;
-				} else {
-					step_counter[0] = degreesTurned * SPD;
-					go('K');
-					state = -2;
-				}
+				step_counter[0] = 25 * SPD; //era 30
+				go('K');
 				MotorsON = 1;
+				state = -2;
 				break;
 			case -2:
 				if (step_counter[0] == 0) {
@@ -2293,7 +2252,7 @@ unsigned char GoToRoom4short(char reset) {
 					state = 8;
 				}
 				break;
-			/*case 10:
+			case 10:
 				step_counter[0] = 30 * SPD;
 				go('O');
 				state = 11;
@@ -2301,7 +2260,7 @@ unsigned char GoToRoom4short(char reset) {
 			case 11:
 				if (step_counter[0] == 0) {
 					state = 12;
-				}*/
+				}
 			default:
 				MotorsON = 0;
 				state = 0;
@@ -2420,7 +2379,7 @@ unsigned char GoToRoom4long(char reset) {
 				if (rightDistance < 8) {
 					step_counter[0] = 2 * SPC_side;
 					go('L');
-					state = 50;
+					state = 13;
 				}
 
 				if (leftDistance < 25) { // passing the thin wall
@@ -2428,13 +2387,6 @@ unsigned char GoToRoom4long(char reset) {
 					countingDirection = 'F';
 					go('F');
 					state = 14;
-				}
-				break;
-			case 50:	//aux
-				if (step_counter[0] == 0) {
-					step_counter[0] = 1 * SPD;
-					go('K');
-					state = 13;
 				}
 				break;
 			case 13:
@@ -2447,20 +2399,13 @@ unsigned char GoToRoom4long(char reset) {
 				if (rightDistance < 8) {
 					step_counter[0] = 2 * SPC_side;
 					go('L');
-					state = 51;
+					state = 15;
 				}
 
 				if (step_counter[1] == 0) { // passed the wall
 					step_counter[0] = 90 * SPD;
 					go('K');
 					state = 16;
-				}
-				break;
-			case 51:	//aux
-				if (step_counter[0] == 0) {
-					step_counter[0] = 1 * SPD;
-					go('K');
-					state = 15;
 				}
 				break;
 			case 15:
@@ -2477,8 +2422,8 @@ unsigned char GoToRoom4long(char reset) {
 				break;
 			case 17:
 				if (frontDistance < 40) {
-					//step_counter[0] = 30 * SPD;
-					//go('O');
+					step_counter[0] = 30 * SPD;
+					go('O');
 					state = 19;
 				}
 
@@ -2498,11 +2443,11 @@ unsigned char GoToRoom4long(char reset) {
 					state = 17;
 				}
 				break;
-			/*case 19:
+			case 19:
 				if (step_counter[0] == 0) {
 					state = 20;
 				}
-				break;*/
+				break;
 			default:
 				MotorsON = 0;
 				state = 0;
@@ -2675,8 +2620,8 @@ unsigned char GoToRoom1(char reset) {
 				}
 
 				if (backDistance > 56 || step_counter[1] == 0) {
-					//step_counter[0] = 20 * SPD;	// to avoid noise
-					//go('O');
+					step_counter[0] = 20 * SPD;
+					go('O');
 					state = 10;
 				}
 				break;
@@ -2700,11 +2645,11 @@ unsigned char GoToRoom1(char reset) {
 					state = 6;
 				}
 				break;
-			/*case 10:
+			case 10:
 				if (step_counter[0] == 0) {
 					state = 11;
 				}
-				break;*/
+				break;
 			default:
 				MotorsON = 0;
 				state = 0;
@@ -2722,18 +2667,22 @@ unsigned char GoToCenterFromRoom1(char reset) {
 	} else {
 		switch (state) {
 			case 0:
-				if (degreesTurned < 0) {
-					step_counter[0] = abs(degreesTurned) * SPD;
-					go('O');
-				} else {
-					step_counter[0] = degreesTurned * SPD;
+				if (lastPositionR1 == 3) {
+					step_counter[0] = 40 * SPD;
 					go('K');
+					state = -3;
+				} else if (lastPositionR1 == 2) {
+					step_counter[0] = 90 * SPD;
+					go('K');
+					state = -2;
+				} else if (lastPositionR1 == 1) {
+					step_counter[0] = 0;
+					state = -3;
 				}
-				state = -1;
 				goFast();
 				MotorsON = 1;
 				break;
-			case -1:
+			case -3:
 				if (step_counter[0] == 0) {
 					step_counter[0] = 20 * SPC_front;
 					go('B');
@@ -2743,10 +2692,10 @@ unsigned char GoToCenterFromRoom1(char reset) {
 			case -2:
 				if (step_counter[0] == 0 || backDistance < 10) {
 					go('L');
-					state = -3;
+					state = -1;
 				}
 				break;
-			case -3:
+			case -1:
 				if (leftDistance < 9) {
 					go('B');
 					state = 1;
@@ -2924,9 +2873,16 @@ unsigned char GoToStartFromRoom4short(char reset) {
 	else {
 		switch (state) {
 			case 0:
-				go('B');
+				go('K');
+				step_counter[0] = 40 * SPD;
 				MotorsON = 1;
-				state = 1;
+				state = -1;
+				break;
+			case -1:
+				if(step_counter[0] == 0) {
+					go('B');
+					state = 1;
+				}
 				break;
 			case 1:
 				if (leftDistance < 8) {
@@ -3020,16 +2976,41 @@ unsigned char GoToStartFromRoom4shortAfterExt(char reset) {
 	else {
 		switch (state) {
 			case 0:
-				if (degreesTurned < 0) {
-					step_counter[0] = abs(degreesTurned) * SPD;
-					go('O');
-				} else {
-					step_counter[0] = degreesTurned * SPD;
+				if (rightDistance < 20) {
 					go('K');
+					step_counter[0] = 25 * SPD;
+					state = -2;
+				} else {
+					state = -1;
 				}
 				
 				MotorsON = 1;
-				state = -1;
+				
+				break;
+			case -2:
+				if (step_counter[0] == 0) {
+					go('L');
+					state = -3;
+				}
+				break;
+			case -3:
+				if (frontDistance < 9) {
+					step_counter[0] = 2 * SPC_front;
+					go('B');
+					state = -4;
+				}
+
+				if (leftDistance < 9) {
+					go('B');
+					state = 1;
+				}
+				break;
+			case -4:
+				if (step_counter[0] == 0) {
+					step_counter[0] = 2 * SPD;
+					go('K');
+					state = -2;
+				}
 				break;
 			case -1:
 				if(step_counter[0] == 0) {
@@ -3048,7 +3029,7 @@ unsigned char GoToStartFromRoom4shortAfterExt(char reset) {
 					state = 2;
 				}
 
-				if (backDistance < 11) {
+				if (backDistance < 10) {
 					step_counter[0] = 90 * SPD;
 					go('O');
 					state = 3;
@@ -3133,219 +3114,9 @@ unsigned char GoToStartFromRoom4long(char reset) {
 		switch (state) {
 			case 0:
 				step_counter[0] = 30 * SPD;
-				go('B');
+				go('K');
 				MotorsON = 1;
-				state = 1;
-				break;
-			case 1:
-				if (leftDistance < 8) {
-					step_counter[0] = 2 * SPC_side;
-					go('R');
-					state = 2;
-				} else if (rightDistance < 8) {
-					step_counter[0] = 2 * SPC_side;
-					go('L');
-					state = 2;
-				}
-
-				if (backDistance < 10) {
-					step_counter[0] = 90 * SPD;
-					go('K');
-					state = 3;
-				}
-				break;
-			case 2:
-				if (step_counter[0] == 0) {
-					go('B');
-					state = 1;
-				}
-				break;
-			case 3:
-				if (step_counter[0] == 0) {
-					go('F');
-					state = 4;
-				}
-				break;
-			case 4:
-				if (leftDistance < 8) {
-					step_counter[0] = 2 * SPC_side;
-					go('R');
-					state = 5;
-				}
-				else if (leftDistance > 13) {
-					step_counter[0] = 2 * SPC_side;
-					go('L');
-					state = 6;
-				}
-
-				if (frontDistance < 12) {
-					state = 8;
-				}
-				break;
-			case 5:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('O');
-					state = 7;
-				}
-				break;
-			case 6:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('K');
-					state = 7;
-				}
-				break;
-			case 7:
-				if (step_counter[0] == 0) {
-					go('F');
-					state = 4;
-				}
-				break;
-			case 8:
-				step_counter[0] = 90 * SPD;
-				go('O');
-				state = 9;
-				break;
-			case 9:
-				if (step_counter[0] == 0) {
-					go('F');
-					state = 10;
-					nextstate = 14;
-				}
-				break;
-			case 10:
-				if (leftDistance < 8) {
-					step_counter[0] = 2 * SPC_side;
-					go('R');
-					state = 11;
-				}
-				else if (rightDistance < 8) {
-					step_counter[0] = 2 * SPC_side;
-					go('L');
-					state = 12;
-				}
-
-				if (rightDistance > 40 && backDistance > 55) {
-					step_counter[0] = 23 * SPC_front;
-					go('F');
-					state = nextstate;
-				}
-				break;
-			case 11:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('O');
-					state = 13;
-				}
-				break;
-			case 12:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('K');
-					state = 13;
-				}
-				break;
-			case 13:
-				if (step_counter[0] == 0) {
-					go('F');
-					state = 10;
-				}
-				break;
-			case 14:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 90 * SPD;
-					go('O');
-					state = 15;
-				}
-				break;
-
-			case 15:
-				if (step_counter[0] == 0) {
-					go('F');
-					state = 10;
-					nextstate = 16;
-				}
-				break;
-			case 16:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 90 * SPD;
-					go('O');
-					state = 17;
-				}
-				break;
-			case 17:
-				if (step_counter[0] == 0) {
-					go('F');
-					state = 18;
-				}
-				break;
-			case 18:
-				if (leftDistance < 8) {
-					step_counter[0] = 2 * SPC_side;
-					go('R');
-					state = 19;
-				}
-				else if (rightDistance < 8) {
-					step_counter[0] = 2 * SPC_side;
-					go('L');
-					state = 20;
-				}
-
-				if (frontDistance < 15) {
-					state = 22;
-				}
-				break;
-			case 19:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('O');
-					state = 21;
-				}
-				break;
-			case 20:
-				if (step_counter[0] == 0) {
-					step_counter[0] = 2 * SPD;
-					go('K');
-					state = 21;
-				}
-				break;
-			case 21:
-				if (step_counter[0] == 0) {
-					go('F');
-					state = 18;
-				}
-				break;
-			default:
-				MotorsON = 0;
-				state = 0;
-				nextstate = 0;
-				return 1;
-				break;
-		}
-	}
-	return 0;
-}
-
-unsigned char GoToStartFromRoom4longAfterExt(char reset) {
-	static int state = 0;
-	static int nextstate = 0;
-	if (reset) {
-		state = 0;
-		nextstate = 0;
-	}
-	else {
-		switch (state) {
-			case 0:
-				if (degreesTurned < 0) {
-					go('O');
-					step_counter[0] = abs(degreesTurned) * SPD;
-				} else {
-					go('K');
-					step_counter[0] = degreesTurned * SPD;
-				}
 				state = -1;
-				MotorsON = 1;
 				break;
 			case -1:
 				if (step_counter[0] == 0) {
@@ -3436,7 +3207,7 @@ unsigned char GoToStartFromRoom4longAfterExt(char reset) {
 					go('R');
 					state = 11;
 				}
-				else if (rightDistance < 8) {
+				else if (rightDistance > 8) {
 					step_counter[0] = 2 * SPC_side;
 					go('L');
 					state = 12;
@@ -3502,7 +3273,249 @@ unsigned char GoToStartFromRoom4longAfterExt(char reset) {
 					go('R');
 					state = 19;
 				}
-				else if (rightDistance < 8) {
+				else if (rightDistance > 8) {
+					step_counter[0] = 2 * SPC_side;
+					go('L');
+					state = 20;
+				}
+
+				if (frontDistance < 15) {
+					state = 22;
+				}
+				break;
+			case 19:
+				if (step_counter[0] == 0) {
+					step_counter[0] = 2 * SPD;
+					go('O');
+					state = 21;
+				}
+				break;
+			case 20:
+				if (step_counter[0] == 0) {
+					step_counter[0] = 2 * SPD;
+					go('K');
+					state = 21;
+				}
+				break;
+			case 21:
+				if (step_counter[0] == 0) {
+					go('F');
+					state = 18;
+				}
+				break;
+			default:
+				MotorsON = 0;
+				state = 0;
+				nextstate = 0;
+				return 1;
+				break;
+		}
+	}
+	return 0;
+}
+
+unsigned char GoToStartFromRoom4longAfterExt(char reset) {
+	static int state = 0;
+	static int nextstate = 0;
+	if (reset) {
+		state = 0;
+		nextstate = 0;
+	}
+	else {
+		switch (state) {
+			case 0:
+				if (rightDistance < 20) {
+					go('K');
+					step_counter[0] = 25 * SPD;
+					state = -2;
+				} else {
+					state = -1;
+				}
+				
+				MotorsON = 1;
+				
+				break;
+			case -2:
+				if (step_counter[0] == 0) {
+					go('L');
+					state = -3;
+				}
+				break;
+			case -3:
+				if (frontDistance < 9) {
+					step_counter[0] = 2 * SPC_front;
+					go('B');
+					state = -4;
+				}
+
+				if (leftDistance < 9) {
+					go('B');
+					state = 1;
+				}
+				break;
+			case -4:
+				if (step_counter[0] == 0) {
+					step_counter[0] = 2 * SPD;
+					go('K');
+					state = -2;
+				}
+				break;
+			case -1:
+				if (step_counter[0] == 0) {
+					go('B');
+					state = 1;
+				}
+				break;
+			case 1:
+				if (leftDistance < 8) {
+					step_counter[0] = 2 * SPC_side;
+					go('R');
+					state = 2;
+				} else if (rightDistance < 8) {
+					step_counter[0] = 2 * SPC_side;
+					go('L');
+					state = 2;
+				}
+
+				if (backDistance < 10) {
+					step_counter[0] = 90 * SPD;
+					go('K');
+					state = 3;
+				}
+				break;
+			case 2:
+				if (step_counter[0] == 0) {
+					go('B');
+					state = 1;
+				}
+				break;
+			case 3:
+				if (step_counter[0] == 0) {
+					go('F');
+					state = 4;
+				}
+				break;
+			case 4:
+				if (leftDistance < 8) {
+					step_counter[0] = 2 * SPC_side;
+					go('R');
+					state = 5;
+				}
+				else if (leftDistance > 12) {
+					step_counter[0] = 2 * SPC_side;
+					go('L');
+					state = 6;
+				}
+
+				if (frontDistance < 12) {
+					state = 8;
+				}
+				break;
+			case 5:
+				if (step_counter[0] == 0) {
+					step_counter[0] = 2 * SPD;
+					go('O');
+					state = 7;
+				}
+				break;
+			case 6:
+				if (step_counter[0] == 0) {
+					step_counter[0] = 2 * SPD;
+					go('K');
+					state = 7;
+				}
+				break;
+			case 7:
+				if (step_counter[0] == 0) {
+					go('F');
+					state = 4;
+				}
+				break;
+			case 8:
+				step_counter[0] = 90 * SPD;
+				go('O');
+				state = 9;
+				break;
+			case 9:
+				if (step_counter[0] == 0) {
+					go('F');
+					state = 10;
+					nextstate = 14;
+				}
+				break;
+			case 10:
+				if (leftDistance < 8) {
+					step_counter[0] = 2 * SPC_side;
+					go('R');
+					state = 11;
+				}
+				else if (rightDistance > 8) {
+					step_counter[0] = 2 * SPC_side;
+					go('L');
+					state = 12;
+				}
+
+				if (rightDistance > 40 && backDistance > 55) {
+					step_counter[0] = 23 * SPC_front;
+					go('F');
+					state = nextstate;
+				}
+				break;
+			case 11:
+				if (step_counter[0] == 0) {
+					step_counter[0] = 2 * SPD;
+					go('O');
+					state = 13;
+				}
+				break;
+			case 12:
+				if (step_counter[0] == 0) {
+					step_counter[0] = 2 * SPD;
+					go('K');
+					state = 13;
+				}
+				break;
+			case 13:
+				if (step_counter[0] == 0) {
+					go('F');
+					state = 10;
+				}
+				break;
+			case 14:
+				if (step_counter[0] == 0) {
+					step_counter[0] = 90 * SPD;
+					go('O');
+					state = 15;
+				}
+				break;
+
+			case 15:
+				if (step_counter[0] == 0) {
+					go('F');
+					state = 10;
+					nextstate = 16;
+				}
+				break;
+			case 16:
+				if (step_counter[0] == 0) {
+					step_counter[0] = 90 * SPD;
+					go('O');
+					state = 17;
+				}
+				break;
+			case 17:
+				if (step_counter[0] == 0) {
+					go('F');
+					state = 18;
+				}
+				break;
+			case 18:
+				if (leftDistance < 8) {
+					step_counter[0] = 2 * SPC_side;
+					go('R');
+					state = 19;
+				}
+				else if (rightDistance > 8) {
 					step_counter[0] = 2 * SPC_side;
 					go('L');
 					state = 20;
@@ -3549,51 +3562,21 @@ unsigned char GoToCenterFromRoom2(char reset) {
 	else {
 		switch (state) {
 			case 0:
-				if (degreesTurned < 0) {
-					step_counter[0] = abs(degreesTurned) * SPD;
-					go('O');
-					state = -3;
-				} else if (degreesTurned <= 90) {
-					go('O');
-					step_counter[0] = (90 - degreesTurned) * SPD;
-					state = -1;
-				} else if (degreesTurned > 90) {
-					go('K');
-					step_counter[0] = (degreesTurned - 90) * SPD;
-					state = -1;
-				}
+				go('B');
 				MotorsON = 1;
-				break;
-			case -1:
-				if (step_counter[0] == 0) {
-					go('B');
-					state = -2;
-				}
-				break;
-			case -2:
-				if (backDistance < 12) {
-					step_counter[0] = 90 * SPD;
-					go('K');
-					state = -3;
-				}
-				break;
-			case -3:
-				if (step_counter[0] == 0) {
-					go('B');
-					state = 1;
-				}
+				state = 1;
 				break;
 			case 1:
 				if (leftDistance < 8) {
 					step_counter[0] = 1 * SPC_side;
 					go('R');
 					state = 2;
-				}/*
+				}
 				else if (leftDistance > 10 && leftDistance < 13) {
 					step_counter[0] = 1 * SPC_side;
 					go('L');
 					state = 3;
-				}*/
+				}
 				else if (leftDistance >= 13) {
 					step_counter[0] = 1 * SPC_side;
 					go('L');
@@ -3625,7 +3608,7 @@ unsigned char GoToCenterFromRoom2(char reset) {
 				}
 				break;
 			case 5:
-				step_counter[0] = 90 * SPD;
+				step_counter[0] = 85 * SPD;
 				go('O');
 				state = 6;
 				break;
@@ -3747,7 +3730,7 @@ unsigned char GoToCenterFromRoom2(char reset) {
 	return 0;
 }
 
-unsigned char GoToCenterFromRoom2point1(char reset) {	// NOT USED anymore
+unsigned char GoToCenterFromRoom2point1(char reset) {
 	static int state = 0;
 	if (reset) state = 0;
 	else {
@@ -4047,12 +4030,6 @@ unsigned char Extinguish(char reset) {
 					MotorsON = 1;
 					state = 3;
 				}
-				if (frontDistance >= flameDistanceLimit) {
-					step_counter[0] = 0.5 * SPC_front;
-					go('F');
-					MotorsON = 1;
-					state = 3;
-				}
 				break;
 			case 1:
 				if (xtime == 0) {
@@ -4158,104 +4135,44 @@ unsigned char ExploreCenterRoom1(char reset) {
 	return 0;
 }
 
-int ScanRoom(char reset) {
-// Returns 200 if no flame was found
-// Returns degrees from -60 to 110 where the flame was found
-// Returns 300 if nothing happened. General state machine should not switch state
+unsigned char ScanRoom(char reset) { 
+// Returns -1 if no flame was found
+// Returns degrees from 0 to 120 where the flame was found
 	static int state = 0;
-	static int degrees = 200;
-	int temp;
+	static int degrees = -1;
 	if (reset) {
 		state = 0;
-		degrees = 200;
+		degrees = -1;
 	} else {
 		switch (state) {
 			case 0:
 				goSlow();
-				step_counter[0] = 110 * SPD;
-				go('O');
+				step_counter[1] = 50 * SPD;
+				go('K');
 				MotorsON = 1;
 				state = 1;
 				break;
 			case 1:
-				if (step_counter[0] == 0) {	// no flame was seen
-					goFast();
-					go('K');	// Return to original orientation
-					step_counter[0] = 110 * SPD;
+				if (step_counter[0] == 0) {
+					go('F');
+					step_counter[0] = 30 * SPC_front;
 					state = 2;
-				}
-				if (COMMAND != '0') {	// flame was seen
-					degrees = 110 - (step_counter[0] / SPD); //'degrees' holds the angle until flame was seen
-					if (COMMAND == '3'){
-						state = 100;
-					} else if (COMMAND == '4' || COMMAND == '5') {
-						step_counter[0] = 60 * SPD;	//turn only 60 degrees more
-						// go O, not necessary
-						state = 3;
-					} else if (COMMAND == '1' || COMMAND == '2') {
-						step_counter[0] = 60 * SPD;	//turn only 60 degrees more
-						go('K');
-						state = 4;
-					}
 				}
 				break;
 			case 2:
-				if (step_counter[0] == 0) {
-					state = 100;
+				if (step_counter[0] == 0 || frontDistance < 20 || COMMAND != '0') {
+					state = 3;
 				}
 				break;
-
-			case 3:
-				if (COMMAND == '3') {
-					degrees = degrees + (60 - (step_counter[0] / SPD));
-					state = 100;
-				}
-				if (COMMAND == '0' || step_counter[0] == 0) {
-				//ERROR, false alarm. Return steps and go to case 0
-					degrees = degrees + (60 - (step_counter[0] / SPD));
-					step_counter[0] = degrees * SPD;
-					go('K');
-					state = 5;
-				}
-				break;
-			case 4:
-				if (COMMAND == '3') {
-					degrees = degrees - (60 - (step_counter[0] / SPD));
-					state = 100;
-				}
-				if (COMMAND == '0' || step_counter[0] == 0) {
-				//ERROR, false alarm. Return steps and go to case 0
-					degrees = degrees - (60 - (step_counter[0] / SPD));
-					if (degrees < 0) {
-						degrees = -degrees;
-						step_counter[0] = degrees * SPD;
-						go('O');
-						state = 5;
-					} else {
-						step_counter[0] = degrees * SPD;
-						go('K');
-						state = 5;
-					}
-					
-				}
-				break;
-			case 5:
-				if (step_counter[0] == 0) {
-					state = 0;
-				}
-				break;
-
 			default:
-				temp = degrees;
 				MotorsON = 0;
 				state = 0;
-				degrees = 200;
 				goFast();
-				return temp;
+				return 1;
 				break;
 		}
 	}
-	return 300;	//Return value if nothing happened
+	return 0;
 }
 
 /**************************************************/

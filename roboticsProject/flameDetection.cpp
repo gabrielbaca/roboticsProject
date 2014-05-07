@@ -1,12 +1,13 @@
-#include <opencv2\core\core.hpp>
-#include <opencv2\highgui\highgui.hpp>
-#include <opencv2\imgproc\imgproc.hpp>
-#include <fstream>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 #include <iostream>
-#include <Windows.h>
-#include <queue>
-#define imageHeight 480
-#define imageWidth 640
+#include <wiringPi.h>
+#include <wiringSerial.h>
+#include <errno.h>
+#define imageHeight 240
+#define imageWidth 320
+
 using std::cout;
 using std::cin;
 using std::endl;
@@ -18,17 +19,10 @@ int hueClick = 0, saturationClick = 0, valueClick = 0;
 int maxRed = 0, maxBlue = 0, maxGreen = 0;
 int minRed = 0, minBlue = 0, minGreen = 0;
 int nClicks = 0;
+int fd;
 RNG rng(12345);
 Mat currentImage = Mat(imageHeight, imageWidth, CV_8UC3);
-Mat gammaImage = Mat(imageHeight, imageWidth, CV_8UC3);
-Mat complementedImage = Mat(imageHeight, imageWidth, CV_8UC3);
 Mat hsvImage = Mat(imageHeight, imageWidth, CV_8UC3);
-Mat binImageYellow = Mat(imageHeight, imageWidth, CV_8UC1);
-Mat binImageGreen = Mat(imageHeight, imageWidth, CV_8UC1);
-Mat binImageDetail = Mat(imageHeight, imageWidth, CV_8UC1);
-Mat binImage = Mat(imageHeight, imageWidth, CV_8UC1);
-Mat filledImage = Mat(imageHeight, imageWidth, CV_8UC1);
-Mat grayImage = Mat(imageHeight, imageWidth, CV_8UC3);
 
 void mouseCoordinates(int event, int x, int y, int flags, void* param);
 Mat correctGamma(Mat &img, double gamma);
@@ -36,92 +30,163 @@ void complementImage(const Mat &sourceImage, Mat &destinationImage);
 void thresholdImage(const Mat &sourceImage, Mat &destinationImage);
 void deteccion_fuego(Mat frame);
 void print();
+void printLocation(char);
 
 int main()
 {
 	VideoCapture cameraFeed;
-	vector<vector<Point>> contours;
-	vector<Vec4i> hierarchy;
-	Mat element = getStructuringElement(MORPH_RECT, Size(1, 1), Point(-1,-1));
+	cameraFeed.set(CV_CAP_PROP_FRAME_WIDTH, imageWidth);
+	cameraFeed.set(CV_CAP_PROP_FRAME_HEIGHT, imageHeight);
+	cameraFeed.open(0);
+	vector <vector<Point> > contours;
+	vector <Vec4i> hierarchy;
+	Rect aux;
+	Mat element = getStructuringElement(MORPH_RECT, Size(3, 3), Point(-1,-1));
+
+	/* Matrix declaration */
+	Mat gammaImage = Mat(imageHeight, imageWidth, CV_8UC3);
+	Mat complementedImage = Mat(imageHeight, imageWidth, CV_8UC3);
+	Mat binImageYellow = Mat(imageHeight, imageWidth, CV_8UC1);
+	Mat binImageRed = Mat(imageHeight, imageWidth, CV_8UC1);
+	Mat binImagePink = Mat(imageHeight, imageWidth, CV_8UC1);
+	Mat binImage = Mat(imageHeight, imageWidth, CV_8UC1);
+	Mat binImagePaul = Mat(imageHeight, imageWidth, CV_8UC1);
+	Mat filledImage = Mat(imageHeight, imageWidth, CV_8UC1);
+	Mat grayImage = Mat(imageHeight, imageWidth, CV_8UC3);
+
 	Mat cannyOutput;
-	//Mat kernel = Mat::ones(Size(5, 5), CV_8UC1);
 	char key = ' ';
-	double gamma = 0.1;
-	int counter = 0;
 	int thresh = 100;
 	char freeze = 0;
-	cameraFeed.open(0);
-	//namedWindow("Camera Feed");
-	//namedWindow("Complemented image");
-	//namedWindow("HSV");
-	//setMouseCallback("Complemented image", mouseCoordinates);
-	//setMouseCallback("HSV", mouseCoordinates);
-	//imshow("Camera Feed", currentImage);
+	char location = '0';
+	setMouseCallback("HSV", mouseCoordinates);
+	printf("\033[2J\033[1;1H");
+	double gammaValue = 0.01;
+
+	if ((fd = serialOpen ("/dev/ttyAMA0", 9600)) < 0)
+	{
+	    fprintf (stderr, "Unable to open serial device: %s\n", strerror (errno)) ;
+	    return 1 ;
+	}
 	
+	if (wiringPiSetup () == -1)
+	{
+	    fprintf (stdout, "Unable to start wiringPi: %s\n", strerror (errno)) ;
+	    return 1 ;
+  	}
+
 	while(key != 27)
 	{
-	//	system("cls");
-	//	print();
+		fflush(stdout);
+
 		if(key == 'f')
 		{
 			freeze = !freeze;
 			key = '0';
 		}
-		if(!freeze)
+		if(!freeze )
 		{
 			cameraFeed >> currentImage;
-			deteccion_fuego(currentImage);
-			//gammaImage = correctGamma(currentImage, 0.2);
-			////complementImage(gammaImage, complementedImage);
-			//bitwise_not(gammaImage, complementedImage);
-			//imshow("comple", complementedImage);
-			//cvtColor(complementedImage, hsvImage, CV_BGR2HSV);
-			//imshow("HSV", hsvImage);
-			//inRange(hsvImage, Scalar(85, 230, 180), Scalar(106, 255, 225), binImageYellow);
-			//inRange(hsvImage, Scalar(90, 250, 5), Scalar(120, 255, 144), binImageGreen);
-			////inRange(hsvImage, Scalar(65, 90, 190), Scalar(91, 143, 225), binImageDetail);
-			//bitwise_or(binImageYellow, binImageGreen, binImage);
-			////bitwise_or(binImageDetail, binImage, binImage);
-			////erode(binImage, filledImage, element);
-			//morphologyEx(binImage, filledImage, MORPH_OPEN, element);
-			//Canny(filledImage, cannyOutput, thresh, thresh *2, 3);
-			//findContours(cannyOutput, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0,0));
 
-			//  /// Get the moments
-			//vector<Moments> mu(contours.size());
-			//for(unsigned int i = 0; i < contours.size(); i++ )
-			//{ 
-			//	mu[i] = moments( contours[i], false ); 
-			//}
+			/* Procesamiento de imagen */			
+			gammaImage = correctGamma(currentImage, 0.15);
+			bitwise_not(gammaImage, complementedImage);
+			cvtColor(complementedImage, hsvImage, CV_BGR2HSV);
+			inRange(hsvImage, Scalar(15, 0, 245), Scalar(40, 20, 255), binImagePaul);
+			inRange(hsvImage, Scalar(0, 0, 253), Scalar(1, 1, 255), binImageYellow); 
+			inRange(hsvImage, Scalar(25, 0, 253), Scalar(35, 25, 255), binImagePink); 
+			inRange(hsvImage, Scalar(120, 30, 108), Scalar(150, 50, 115), binImageRed); 
+			bitwise_or(binImageYellow, binImagePink, binImage);
+			bitwise_or(binImage, binImageRed, binImage);
+			bitwise_or(binImage, binImagePaul, binImage);
+			bitwise_not(binImage, binImage);
+			morphologyEx(binImage, filledImage, MORPH_OPEN, element);
+			dilate(binImage,binImage, element);
+			Canny(filledImage, cannyOutput, thresh, thresh * 2, 3);
 
-			/////  Get the mass centers:
-			//vector<Point2f> mc( contours.size());
-			//for(unsigned int i = 0; i < contours.size(); i++ )
-			//{ 
-			//	mc[i] = Point2d( mu[i].m10/mu[i].m00 , mu[i].m01/mu[i].m00 ); 
-			//}
+			/* Detección de contornos */
+			findContours(cannyOutput, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0,0));
+			
+			if(contours.size() > 0) 
+			{
+				Moments mu;
+				Point2f mc;
+				vector<Rect> boundRect(contours.size());
+				vector<vector<Point> > contours_poly( contours.size() );
+				Mat drawing = Mat::zeros( cannyOutput.size(), CV_8UC3);
+				for(unsigned int i = 0; i < contours.size(); i++ )
+				{
+					mu = moments(contours[i]);
+					mc = Point2f(mu.m10 / mu.m00, mu.m01 / mu.m00);
+					int center = mc.x;
+					if(mc.y > 30)
+					{
+						Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255));
+						drawContours(drawing, contours, i, color, 2, 8, hierarchy, 0, Point());
+	
+						double a = contourArea(contours[i], false);
+						if(a > 0)
+						{	
+							drawContours(drawing, contours, i, color, 2, 8, hierarchy, 0, Point());			
+							approxPolyDP( Mat(contours[i]), contours_poly[i], 3, true);
+							boundRect[i] = boundingRect(Mat(contours_poly[i]));
+							aux = boundRect[i];
+							
+							if (boundRect[i].width / boundRect[i].height >= 0)
+							{
+		
+								if(center > (drawing.cols / 5) * 4) 
+								{
+									fflush (stdout) ;
+		      						location = '5';
+									serialFlush(fd);
+								}
 
-			//Mat drawing = Mat::zeros( cannyOutput.size(), CV_8UC3);
-			//for(unsigned int i = 0; i < contours.size(); i++ )
-			//{
-			//  Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255));
-			//  drawContours(drawing, contours, i, color, 2, 8, hierarchy, 0, Point());
-			//  circle(drawing, mc[i], 4, color, -1, 8, 0 );
-			//}
-
-			//imshow("Binary", filledImage);
-			//imshow("Contours", drawing);
+								else if(center > (drawing.cols / 5) *3) 
+								{
+									fflush (stdout) ;
+		      						location = '4';
+									serialFlush(fd);
+								}
+								else if (center > (drawing.cols / 5) * 2) 
+								{
+									fflush (stdout) ;
+		      						location = '3';
+									serialFlush(fd);
+								}
+								else if (center > drawing.cols / 5) 
+								{
+									fflush (stdout) ;
+		      						location = '2';
+									serialFlush(fd);
+								}
+								else 
+								{ 
+									fflush (stdout) ;
+		      						location = '1';
+									serialFlush(fd);
+								}
+							}
+							waitKey(50);
+						}
+					}
+				}
+			}
+			else
+			{
+				location = '0';
+			}	
 		}
+		printLocation(location);
 		key = waitKey(15);
-		//Sleep(15);
 	}
+	serialClose(fd);
 	return 0;
 }
+
 void print()
 {
-	cout << "X: " << coordinateX << ", Y: " << coordinateY << endl; 
-	cout << "R: " << redClick << ", G: " << greenClick << ", B: " << blueClick << endl;
-	cout << "H: " << hueClick << ", S: " << saturationClick << ", V: " << valueClick << endl;
+	cout << "H: " << hueClick << ", S: " << saturationClick << ", V: " << valueClick << endl << endl;
 }
 
 void mouseCoordinates(int event, int x, int y, int flags, void* param)
@@ -141,16 +206,16 @@ void mouseCoordinates(int event, int x, int y, int flags, void* param)
             coordinateX = x;
             coordinateY = y;
             redClick = currentImage.at<Vec3b>(y, x)[2];
-	        greenClick = currentImage.at<Vec3b>(y, x)[1];
-	        blueClick = currentImage.at<Vec3b>(y, x)[0];
+	    	greenClick = currentImage.at<Vec3b>(y, x)[1];
+	   	 	blueClick = currentImage.at<Vec3b>(y, x)[0];
 
-			hueClick = hsvImage.at<Vec3b>(y, x)[0];
-	        saturationClick = hsvImage.at<Vec3b>(y, x)[1];
-	        valueClick = hsvImage.at<Vec3b>(y, x)[2];
+            hueClick = hsvImage.at<Vec3b>(y, x)[0];
+	    	saturationClick = hsvImage.at<Vec3b>(y, x)[1];
+	    	valueClick = hsvImage.at<Vec3b>(y, x)[2];
 			print();
             break;
         case CV_EVENT_RBUTTONDOWN:
-			system("cls");
+			printf("\033[2J\033[1;1H");
             break;
     }
 }
@@ -169,106 +234,16 @@ Mat correctGamma(Mat &img, double gamma) {
 	return result;
 }
 
-void deteccion_fuego(Mat frame){
-	int dilation_size = 0;
-	vector<vector<Point>> contours;
-	Mat canny_output;
-	Mat thr1(frame.rows, frame.cols, CV_8UC1);
-	Mat src_gray; 
-	vector<Vec4i> hierarchy;
-	Rect aux;
-	cvtColor(frame, src_gray, CV_RGB2GRAY);
-	adaptiveThreshold(src_gray, thr1, 255, ADAPTIVE_THRESH_MEAN_C, THRESH_BINARY , 3, 1);
-	threshold(src_gray, thr1, 250, 255,THRESH_BINARY);
-	//Canny( thr1, canny_output, 255, 255, 3);
-	Mat element = getStructuringElement(MORPH_RECT, Size(2 * dilation_size + 1, 2 * dilation_size + 1), Point(dilation_size, dilation_size));
-	morphologyEx(thr1, thr1, MORPH_CLOSE , element);
-
-	imshow("Camara",frame);	
-	imshow("Threshold", thr1);
-	waitKey(30);
-	
- 
-	/// Find contours
-	findContours( thr1, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0) );
- 
-	//cout<<" "<<endl;
-	vector<Rect> boundRect(contours.size());
-	vector<vector<Point> > contours_poly(contours.size());
-
-	/// Draw contours
-	Mat drawing = Mat::zeros(thr1.size(), CV_8UC3);
-	if (contours.size()>0)
-	//for( int i = 0; i< contours.size()-contours.size()/2; i++ )
+void printLocation (char loc)
+{
+	printf("\033[2J\033[1;1H");
+	if(loc == '0')
 	{
-		double a = contourArea(contours[0], false);  //  Find the area of contour
-		if(a > 5)
-		{					  //25
-			system("cls");
-			cout<<"Fuego detectado"<<endl;
-			//waitKey(150);
-			//fire(Pic18);
-			drawContours(thr1, contours, 0,  Scalar( 255, 255, 255), 2, 8, hierarchy, 0, Point());
-			//cout<<"p1"<<endl;
-			approxPolyDP(Mat(contours[0]), contours_poly[0], 3, true );
-			//cout<<"p2"<<endl;
-			boundRect[0] = boundingRect(Mat(contours_poly[0]));
-			//cout<<"p3"<<endl;
-			//waitKey();
-			aux = boundRect[0];
-			if (boundRect[0].width / boundRect[0].height <= 1)
-			{
-				// cout<<"p4"<<endl;
-				//rectangle( drawing, boundRect[0].tl(), boundRect[0].br(), Scalar( 255, 255, 255), 2, 8, 0 );
-				//cout<<"p5"<<endl;
-				//rectangle( frame, boundRect[0].tl(), boundRect[0].br(), Scalar( 0, 0, 255), 2, 8, 0 );
-		
-				//cout<<"boundRect[0].x"<<boundRect[0].x<<endl;
-				//cout<<"boundRect[0].y"<<boundRect[0].y<<endl;
-				//waitKey();
-		
-				if(boundRect[0].x > (frame.cols / 3) * 2) 
-				{
-					//putText(frame, "Right", Point(5, 440),  FONT_HERSHEY_SIMPLEX, 2, Scalar(255, 255, 255), 1, 8, false);
-					cout << "Flama a la derecha" << endl;
-				}
-				else if (boundRect[0].x < frame.cols / 3) 
-				{
-					//putText(frame, "Center", Point(5, 440),  FONT_HERSHEY_SIMPLEX, 2, Scalar(255, 255, 255), 1, 8, false);
-					cout << "Flama a la izquierda" << endl;
-				}
-				else 
-				{ 
-					//putText(frame, "Left", Point(5, 440),  FONT_HERSHEY_SIMPLEX, 2, Scalar(255, 255, 255), 1, 8, false);
-					//cout << "Flama centrada en x" << endl;
-					if(boundRect[0].y < frame.rows / 3)
-					{
-						cout << "Arriba del centro" << endl;
-					}
-					else if(boundRect[0].y > (frame.rows / 3) * 2)
-					{
-						cout << "Abajo del centro" << endl;
-					}
-					else
-					{
-						cout << "Flama centrada" << endl;
-					}
-				}
-
-				//imshow("Flama detectada", frame);
-				waitKey(50);
-			}
-		}
-		else
-		{
-			system("cls");
-			cout << "Flama no encontrada" << endl;
-			//rectangle(frame, aux.tl(), aux.br(), Scalar( 0, 0, 255), 2, 8, 0 );
-			//rectangle(drawing, boundRect[0].tl(), boundRect[0].br(), Scalar(0, 0, 0), 2, 8, 0);
-			//imshow("Flama detectada", frame);
-		}
-	//system("cls");
-	//imshow("Flama detectada", frame);
-	//imshow( "Contours", drawing );
+		cout << "Flama no encontrada" << endl;
 	}
+	else if(loc <= '5')
+	{
+		cout << "Flama en la region " << loc << endl;
+	}
+	serialPutchar(fd, loc);
 }

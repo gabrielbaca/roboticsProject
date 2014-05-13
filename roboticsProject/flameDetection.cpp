@@ -2,6 +2,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <iostream>
+#include <fstream>
 #include <wiringPi.h>
 #include <wiringSerial.h>
 #include <errno.h>
@@ -88,14 +89,14 @@ int main()
 			cameraFeed >> currentImage;		// Se obtiene el frame actual de la cámara
 
 			/* Procesamiento de imagen */			
-			gammaImage = correctGamma(currentImage, 0.15);		// Se hace una corrección de Gamma sobre la imagen
+			gammaImage = correctGamma(currentImage, 0.025);		// Se hace una corrección de Gamma sobre la imagen
 			bitwise_not(gammaImage, complementedImage);			// Se invierten los colores de la imagen
 			cvtColor(complementedImage, hsvImage, CV_BGR2HSV);	// Se transforma al espacio de color HSV
 			inRange(hsvImage, Scalar(15, 0, 245), Scalar(40, 20, 255), binImageSecondPink);	// Se filtra el color rosa
 			inRange(hsvImage, Scalar(0, 0, 253), Scalar(1, 1, 255), binImageYellow); 		// Se filtra el color amarillo
 			inRange(hsvImage, Scalar(25, 0, 253), Scalar(35, 25, 255), binImagePink); 		// Se filtra el color rosa
 			inRange(hsvImage, Scalar(120, 30, 108), Scalar(150, 50, 115), binImageRed); 	// Se filtra el color rojo
-			
+
 			/* Unión de las imágenes filtradas*/
 			bitwise_or(binImageYellow, binImagePink, binImage);			
 			bitwise_or(binImage, binImageRed, binImage);				
@@ -103,11 +104,17 @@ int main()
 
 			bitwise_not(binImage, binImage); 	// Inversión de colores
 			morphologyEx(binImage, filledImage, MORPH_OPEN, element);	// Apertura para eliminar el ruido
-			dilate(binImage, binImage, element);	// Dilatación para que se detecte mejor el objeto
+			//dilate(binImage, binImage, element);	// Dilatación para que se detecte mejor el objeto
 			Canny(filledImage, cannyOutput, thresh, thresh * 2, 3);	// Resaltar los contornos
 
 			/* Detección de contornos */
 			findContours(cannyOutput, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0,0)); // Detección de contornos
+			
+			/* Imagenes de Debug, desactivadas para correcta ejecucion del script */
+			//namedWindow("HSV", CV_WINDOW_NORMAL);
+			//namedWindow("Pre-contours",CV_WINDOW_NORMAL);
+			//imshow("HSV",hsvImage);
+			//imshow("Pre-contours", filledImage);
 			
 			if(contours.size() > 0)
 			{
@@ -122,7 +129,7 @@ int main()
 					mc = Point2f(mu.m10 / mu.m00, mu.m01 / mu.m00);	// Cálculo de centro de masa
 					int center = mc.x;
 
-					if(mc.y > 30) // Ignora la sección superior por 30 píxeles
+					if((mc.y > 30)&&(mc.y < 210)) // Ignora las secciones superior e inferior por 30 píxeles
 					{
 						double a = contourArea(contours[i], false);	// Obtiene área
 						if(a > 0)
@@ -132,41 +139,44 @@ int main()
 							approxPolyDP( Mat(contours[i]), contours_poly[i], 3, true);		// Aproximación a polígonos
 							boundRect[i] = boundingRect(Mat(contours_poly[i]));
 							
-							if (boundRect[i].width / boundRect[i].height >= 0)
+							
+							/* Detección de la región en la que se encuentra la flama */
+							if(center > (drawing.cols / 5) * 4)
 							{
-								/* Detección de la región en la que se encuentra la flama */
-								if(center > (drawing.cols / 5) * 4)
-								{
-									fflush (stdout) ;
-		      						location = '5';
-									serialFlush(fd);
-								}
-								else if(center > (drawing.cols / 5) *3) 
-								{
-									fflush (stdout) ;
-		      						location = '4';
-									serialFlush(fd);
-								}
-								else if (center > (drawing.cols / 5) * 2) 
-								{
-									fflush (stdout) ;
-		      						location = '3';
-									serialFlush(fd);
-								}
-								else if (center > drawing.cols / 5) 
-								{
-									fflush (stdout) ;
-		      						location = '2';
-									serialFlush(fd);
-								}
-								else 
-								{ 
-									fflush (stdout) ;
-		      						location = '1';
-									serialFlush(fd);
-								}
+								fflush (stdout) ;
+	      						location = '5';
+								serialFlush(fd);
 							}
+							else if(center > (drawing.cols / 5) *3) 
+							{
+								fflush (stdout) ;
+	      						location = '4';
+								serialFlush(fd);
+							}
+							else if (center > (drawing.cols / 5) * 2) 
+							{
+								fflush (stdout) ;
+	      						location = '3';
+								serialFlush(fd);
+							}
+							else if (center > drawing.cols / 5) 
+							{
+								fflush (stdout) ;
+	      						location = '2';
+								serialFlush(fd);
+							}
+							else 
+							{ 
+								fflush (stdout) ;
+	      						location = '1';
+								serialFlush(fd);
+							}
+							/* Imagenes de Debug, desactivadas para correcta ejecucion del script */
+							//namedWindow("Contours",CV_WINDOW_NORMAL);
+							//imshow("Contours", drawing);
+
 							waitKey(50);
+
 						}
 					}
 				}

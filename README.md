@@ -1,4 +1,6 @@
 Robotics project
 ===============
 
-Vision portion of a robotics project, that aims to detect a flame in a candle.
+Robot built in order to navigate in a small house, exploring each room in search for a candle. 
+- Main board: PIC32
+- Vision: Raspberry Pi - OpenCV
